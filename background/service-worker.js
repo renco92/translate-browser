@@ -27,6 +27,12 @@ chrome.runtime.onInstalled.addListener(async () => {
     });
 
     chrome.contextMenus.create({
+      id: "quizzler-translator-mode",
+      title: "Quizzler: ✍️ Toggle Translator Workbench Mode on Page",
+      contexts: ["page"]
+    });
+
+    chrome.contextMenus.create({
       id: "quizzler-toggle-overlay",
       title: "Quizzler: Toggle Floating Overlay Bar on This Site",
       contexts: ["page"]
@@ -85,6 +91,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     try {
       await chrome.tabs.sendMessage(tab.id, {
         type: "TRIGGER_SMART_IMMERSE_PAGE"
+      });
+    } catch (e) {}
+  } else if (info.menuItemId === "quizzler-translator-mode") {
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "TOGGLE_TRANSLATOR_MODE"
       });
     } catch (e) {}
   } else if (info.menuItemId === "quizzler-toggle-overlay") {

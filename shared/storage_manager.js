@@ -1158,12 +1158,14 @@ class QuizzlerStorageManager {
       this.data.pageTranslations[pageKey]?.[blockIdx] || {
         text: "",
         score: null,
-        revealed: false
+        revealed: false,
+        sourceText: "",
+        referenceText: ""
       }
     );
   }
 
-  async savePageBlockTranslation(pageKey, blockIdx, text) {
+  async savePageBlockTranslation(pageKey, blockIdx, text, meta = {}) {
     if (!this.data.pageTranslations[pageKey]) {
       this.data.pageTranslations[pageKey] = {};
     }
@@ -1174,13 +1176,14 @@ class QuizzlerStorageManager {
     };
     this.data.pageTranslations[pageKey][blockIdx] = {
       ...prev,
+      ...meta,
       text,
       updatedAt: Date.now()
     };
     await this.save();
   }
 
-  async savePageBlockScore(pageKey, blockIdx, score) {
+  async savePageBlockScore(pageKey, blockIdx, score, meta = {}) {
     if (!this.data.pageTranslations[pageKey]) {
       this.data.pageTranslations[pageKey] = {};
     }
@@ -1191,10 +1194,152 @@ class QuizzlerStorageManager {
     };
     this.data.pageTranslations[pageKey][blockIdx] = {
       ...prev,
+      ...meta,
       score: Math.max(0, Math.min(4, Math.round(score))),
       updatedAt: Date.now()
     };
     await this.save();
+  }
+
+  /**
+   * Computes translation progress and average 0-4 star score for a given webpage.
+   */
+  getPageTranslationStats(pageKey, totalBlocks = 0) {
+    const blocksMap = this.data.pageTranslations[pageKey] || {};
+    const entries = Object.values(blocksMap);
+    const translated = entries.filter((e) => e && (e.text || "").trim().length > 0).length;
+    const scoredEntries = entries.filter(
+      (e) => e && typeof e.score === "number" && !Number.isNaN(e.score)
+    );
+    const scored = scoredEntries.length;
+    const avgScore =
+      scored > 0
+        ? (scoredEntries.reduce((acc, e) => acc + e.score, 0) / scored).toFixed(1)
+        : "0.0";
+    const denom = Math.max(totalBlocks, entries.length, 1);
+    const pct = totalBlocks > 0 || translated > 0 ? Math.min(100, Math.round((translated / denom) * 100)) : 0;
+
+    return {
+      translated,
+      scored,
+      total: totalBlocks || entries.length,
+      pct,
+      avgScore
+    };
+  }
+
+  /**
+   * Compares a user's translation draft against a reference translation,
+   * returning word-level diff tokens, match percentage, and suggested 0-4 star rating.
+   */
+  evaluateTranslationMatch(userText, referenceText) {
+    const expandContractions = (str) =>
+      String(str || "")
+        .replace(/[\u2018\u2019\u02bc]/g, "'")
+        .replace(/\bcan't\b/gi, "cannot")
+        .replace(/\bwon't\b/gi, "will not")
+        .replace(/\bn't\b/gi, " not")
+        .replace(/'re\b/gi, " are")
+        .replace(/'ve\b/gi, " have")
+        .replace(/'ll\b/gi, " will")
+        .replace(/'m\b/gi, " am")
+        .replace(/\bit's\b/gi, "it is")
+        .replace(/\bthat's\b/gi, "that is")
+        .replace(/\bwhat's\b/gi, "what is")
+        .replace(/\bthere's\b/gi, "there is");
+
+    const tokenizeWords = (str) =>
+      expandContractions(str)
+        .toLowerCase()
+        .match(/[a-zà-ÿœæñß0-9]+/gi) || [];
+
+    const stopSet = new Set([
+      "a", "an", "the", "to", "of", "in", "on", "at", "by", "for", "is", "are", "was", "were", "be"
+    ]);
+
+    const userWords = tokenizeWords(userText);
+    const refWords = tokenizeWords(referenceText);
+
+    if (userWords.length === 0 || refWords.length === 0) {
+      return {
+        matchPct: 0,
+        suggestedScore: 0,
+        refDiffTokens: [],
+        feedback: "Type your translation above to compare with the reference."
+      };
+    }
+
+    const userSet = new Set(userWords);
+    // Also add simple stem variants (strip trailing s/ed/ing) for fairer matching
+    for (const w of userWords) {
+      if (w.length > 4 && w.endsWith("s")) userSet.add(w.slice(0, -1));
+      if (w.length > 5 && w.endsWith("ed")) userSet.add(w.slice(0, -2));
+      if (w.length > 5 && w.endsWith("ing")) userSet.add(w.slice(0, -3));
+    }
+
+    let contentTotal = 0;
+    let contentMatched = 0;
+    let allMatched = 0;
+
+    for (const rw of refWords) {
+      const stem =
+        rw.length > 4 && rw.endsWith("s")
+          ? rw.slice(0, -1)
+          : rw.length > 5 && rw.endsWith("ed")
+          ? rw.slice(0, -2)
+          : rw;
+      const isHit = userSet.has(rw) || userSet.has(stem);
+      if (isHit) allMatched++;
+      if (!stopSet.has(rw)) {
+        contentTotal++;
+        if (isHit) contentMatched++;
+      }
+    }
+
+    const ratio =
+      contentTotal > 0 ? contentMatched / contentTotal : allMatched / refWords.length;
+    const matchPct = Math.min(100, Math.round(ratio * 100));
+
+    let suggestedScore = 0;
+    let feedback = "Keep practicing — compare the highlighted key terms below.";
+    if (matchPct >= 78) {
+      suggestedScore = 4;
+      feedback = "🌟 Excellent translation! Captures the meaning and key vocabulary.";
+    } else if (matchPct >= 55) {
+      suggestedScore = 3;
+      feedback = "✨ Very close! You captured most of the sentence's meaning.";
+    } else if (matchPct >= 32) {
+      suggestedScore = 2;
+      feedback = "👍 Good gist! Check the amber words in the reference for missing nuances.";
+    } else if (matchPct >= 12) {
+      suggestedScore = 1;
+      feedback = "🌱 Partial match — you got a few words; review the glossary hints & reference.";
+    }
+
+    // Build token-level diff of the reference string so matched vs missed words are visually clear
+    const rawRefParts = String(referenceText || "").split(/([a-zA-ZÀ-ÿœŒæÆñÑß0-9'’]+)/g);
+    const refDiffTokens = rawRefParts.filter(Boolean).map((part) => {
+      if (!/^[a-zA-ZÀ-ÿœŒæÆñÑß0-9'’]+$/.test(part)) {
+        return { text: part, type: "sep" };
+      }
+      const subWords = tokenizeWords(part);
+      const matched = subWords.some((sw) => {
+        const stem = sw.length > 4 && sw.endsWith("s") ? sw.slice(0, -1) : sw;
+        return userSet.has(sw) || userSet.has(stem);
+      });
+      const isStop = subWords.every((sw) => stopSet.has(sw));
+      return {
+        text: part,
+        type: matched ? "matched" : isStop ? "neutral" : "missed"
+      };
+    });
+
+    return {
+      matchPct,
+      suggestedScore,
+      refDiffTokens,
+      feedback
+    };
   }
 }
 

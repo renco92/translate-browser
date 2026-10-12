@@ -8,7 +8,7 @@
   "use strict";
 
   const panelState = {
-    activeTab: "inspector", // 'inspector' | 'flashcards' | 'sites' | 'vault'
+    activeTab: "inspector", // 'inspector' | 'translate' | 'flashcards' | 'sites' | 'vault'
     currentWord: null,
     deck: [],
     cardIndex: 0,
@@ -16,6 +16,12 @@
     cardFilter: "all",
     kanaTab: "hiragana",
     activeTabStatus: null,
+    translateMode: "page", // 'page' | 'custom'
+    pageBlocks: [],
+    customBlocks: [],
+    activeBlockCursor: 0,
+    pageKey: "custom_workbench",
+    revealedSideBlocks: new Set(),
     toastTimer: null
   };
 
@@ -37,12 +43,18 @@
     if (chrome.tabs?.onActivated) {
       chrome.tabs.onActivated.addListener(() => {
         refreshActiveTabStatus();
+        if (panelState.activeTab === "translate" && panelState.translateMode === "page") {
+          syncBlocksFromActivePage();
+        }
       });
     }
     if (chrome.tabs?.onUpdated) {
       chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
         if (changeInfo.status === "complete" || changeInfo.url) {
           refreshActiveTabStatus();
+          if (panelState.activeTab === "translate" && panelState.translateMode === "page") {
+            syncBlocksFromActivePage();
+          }
         }
       });
     }
@@ -57,7 +69,8 @@
           title: tab?.title || "",
           overlayEnabled: false,
           isBookmarked: false,
-          isNativeTargetLang: false
+          isNativeTargetLang: false,
+          translatorMode: false
         };
         renderHeaderAndControls();
         return;
@@ -71,7 +84,8 @@
           title: tab.title,
           overlayEnabled: window.quizzlerStorage.isOverlayEnabledForPage(tab.url),
           isBookmarked: window.quizzlerStorage.isUrlBookmarked(tab.url),
-          isNativeTargetLang: false
+          isNativeTargetLang: false,
+          translatorMode: false
         };
       }
     } catch (e) {
@@ -84,7 +98,8 @@
             ? window.quizzlerStorage.isOverlayEnabledForPage(tab.url)
             : false,
           isBookmarked: tab?.url ? window.quizzlerStorage.isUrlBookmarked(tab.url) : false,
-          isNativeTargetLang: false
+          isNativeTargetLang: false,
+          translatorMode: false
         };
       } catch (_) {}
     }
@@ -111,6 +126,9 @@
   function renderAll() {
     renderHeaderAndControls();
     renderInspectorTab();
+    if (panelState.activeTab === "translate") {
+      renderTranslateTab();
+    }
     if (panelState.activeTab === "flashcards") {
       renderFlashcard();
     }
@@ -137,6 +155,8 @@
 
     const immerseLabel = document.getElementById("sp-immerse-label");
     const detectBadge = document.getElementById("sp-page-detect-badge");
+    const translatorBtn = document.getElementById("sp-btn-translator-mode");
+    const translatorLabel = document.getElementById("sp-translator-mode-label");
     const overlayBtn = document.getElementById("sp-btn-toggle-overlay");
     const overlayLabel = document.getElementById("sp-overlay-label");
     const bookmarkBtn = document.getElementById("sp-btn-bookmark-page");
@@ -178,16 +198,26 @@
       }
     }
 
+    const translatorOn = Boolean(st?.translatorMode);
+    if (translatorLabel) {
+      translatorLabel.textContent = translatorOn ? "Translator: ON" : "Translator Mode";
+    }
+    if (translatorBtn) {
+      translatorBtn.className = translatorOn
+        ? "pro-btn px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 text-emerald-300 border-emerald-500/40 bg-emerald-950/30"
+        : "pro-btn px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 text-yellow-300 border-yellow-400/40";
+    }
+
     const overlayOn = Boolean(
       st?.url ? window.quizzlerStorage.isOverlayEnabledForPage(st.url) : st?.overlayEnabled
     );
     if (overlayLabel) {
-      overlayLabel.textContent = `Overlay Bar: ${overlayOn ? "On" : "Off"}`;
+      overlayLabel.textContent = `Bar: ${overlayOn ? "On" : "Off"}`;
     }
     if (overlayBtn) {
       overlayBtn.className = overlayOn
-        ? "pro-btn px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 text-emerald-300 border-emerald-500/40 bg-emerald-950/30"
-        : "pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-zinc-300";
+        ? "pro-btn px-2 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 text-emerald-300 border-emerald-500/40 bg-emerald-950/30"
+        : "pro-btn px-2 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-zinc-300";
     }
 
     const bookmarked = Boolean(
@@ -915,6 +945,477 @@
   }
 
   // ==========================================
+  // TAB 2: TRANSLATOR WORKBENCH (BLOCK-BY-BLOCK)
+  // ==========================================
+
+  function getDefaultPracticeBlocks(lang) {
+    const samples = {
+      fr: [
+        {
+          blockIndex: 0,
+          sourceText:
+            "Lorsque j'avais six ans j'ai vu, une fois, une magnifique image, dans un livre sur la Forêt Vierge qui s'appelait « Histoires Vécues ».",
+          referenceText:
+            "When I was six years old I saw, once, a magnificent picture in a book about the Primeval Forest called 'True Stories'."
+        },
+        {
+          blockIndex: 1,
+          sourceText:
+            "On ne voit bien qu'avec le cœur. L'essentiel est invisible pour les yeux.",
+          referenceText:
+            "One sees clearly only with the heart. What is essential is invisible to the eye."
+        },
+        {
+          blockIndex: 2,
+          sourceText:
+            "C'est le temps que tu as perdu pour ta rose qui fait ta rose si importante.",
+          referenceText:
+            "It is the time you have wasted for your rose that makes your rose so important."
+        }
+      ],
+      ja: [
+        {
+          blockIndex: 0,
+          sourceText: "昔々、静かな森の近くに小さな村がありました。",
+          referenceText: "Once upon a time, there was a small village near a quiet forest."
+        },
+        {
+          blockIndex: 1,
+          sourceText: "その森には、賢くて優しい白い狐が住んでいました。",
+          referenceText: "In that forest lived a wise and kind white fox."
+        }
+      ],
+      es: [
+        {
+          blockIndex: 0,
+          sourceText:
+            "Sólo con el corazón se puede ver bien; lo esencial es invisible para los ojos.",
+          referenceText:
+            "Only with the heart can one see well; what is essential is invisible to the eyes."
+        }
+      ],
+      de: [
+        {
+          blockIndex: 0,
+          sourceText:
+            "Man sieht nur mit dem Herzen gut. Das Wesentliche ist für die Augen unsichtbar.",
+          referenceText:
+            "One sees well only with the heart. The essential is invisible to the eyes."
+        }
+      ],
+      it: [
+        {
+          blockIndex: 0,
+          sourceText:
+            "Non si vede bene che col cuore. L'essenziale è invisibile agli occhi.",
+          referenceText:
+            "One sees well only with the heart. What is essential is invisible to the eyes."
+        }
+      ]
+    };
+    return samples[lang] || samples.fr;
+  }
+
+  function getActiveWorkbenchBlocks() {
+    if (panelState.translateMode === "custom" && panelState.customBlocks.length > 0) {
+      return panelState.customBlocks;
+    }
+    if (panelState.pageBlocks.length > 0) {
+      return panelState.pageBlocks;
+    }
+    const lang = window.quizzlerStorage.data.targetLang;
+    return getDefaultPracticeBlocks(lang);
+  }
+
+  async function syncBlocksFromActivePage() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id && tab.url && !tab.url.startsWith("chrome")) {
+        const res = await chrome.tabs.sendMessage(tab.id, { type: "GET_PAGE_BLOCKS" });
+        if (res?.ok && Array.isArray(res.blocks) && res.blocks.length > 0) {
+          panelState.pageBlocks = res.blocks;
+          panelState.pageKey = res.pageKey || window.quizzlerStorage.getPageKey(tab.url);
+          if (panelState.activeBlockCursor >= panelState.pageBlocks.length) {
+            panelState.activeBlockCursor = 0;
+          }
+          renderTranslateTab();
+          return;
+        }
+      }
+    } catch (e) {}
+
+    const lang = window.quizzlerStorage.data.targetLang;
+    panelState.pageKey = `practice_${lang}`;
+    panelState.pageBlocks = getDefaultPracticeBlocks(lang);
+    panelState.activeBlockCursor = 0;
+    renderTranslateTab();
+  }
+
+  function tokenizeSidePanelPassage(text, lang) {
+    if (!text) return "";
+    if (lang === "ja") {
+      const rubyHtml = window.quizzlerStorage.annotateJapaneseWithRuby(text);
+      const tokenRegex =
+        /(<ruby>.*?<\/ruby>)|([一-龯々〆ヵヶぁ-んァ-ヶーa-zA-Z0-9]+)|([、。！？「」『』（）…・.,!?:;]+)|(\s+)/g;
+      let match;
+      let html = "";
+      while ((match = tokenRegex.exec(rubyHtml)) !== null) {
+        if (match[1]) {
+          const baseKanji = match[1]
+            .replace(/<rt>.*?<\/rt>/g, "")
+            .replace(/<[^>]+>/g, "")
+            .trim();
+          html += `<span class="sp-source-word cursor-pointer px-0.5 rounded hover:bg-yellow-400/25 border-b border-transparent hover:border-yellow-400 transition" data-word="${encodeURIComponent(
+            baseKanji
+          )}">${match[1]}</span>`;
+        } else if (match[2]) {
+          html += `<span class="sp-source-word cursor-pointer px-0.5 rounded hover:bg-yellow-400/25 border-b border-transparent hover:border-yellow-400 transition" data-word="${encodeURIComponent(
+            match[2]
+          )}">${escapeHtml(match[2])}</span>`;
+        } else if (match[3]) {
+          html += escapeHtml(match[3]);
+        } else if (match[4]) {
+          html += match[4];
+        }
+      }
+      return html;
+    }
+
+    const tokenRegex =
+      /([a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]+)|([^a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]+)/g;
+    let match;
+    let html = "";
+    while ((match = tokenRegex.exec(text)) !== null) {
+      if (match[1]) {
+        html += `<span class="sp-source-word cursor-pointer px-0.5 rounded hover:bg-yellow-400/25 border-b border-transparent hover:border-yellow-400 transition" data-word="${encodeURIComponent(
+          match[1]
+        )}">${escapeHtml(match[1])}</span>`;
+      } else if (match[2]) {
+        html += escapeHtml(match[2]);
+      }
+    }
+    return html;
+  }
+
+  function renderSideDiffReference(userText, refEn) {
+    if (!refEn) return `<span class="text-zinc-400 italic">Click "🔍 Check & Compare" to fetch & diff the reference translation.</span>`;
+    if (!userText || !userText.trim()) {
+      return escapeHtml(refEn);
+    }
+    const evalResult = window.quizzlerStorage.evaluateTranslationMatch(userText, refEn);
+    if (!evalResult.refDiffTokens || evalResult.refDiffTokens.length === 0) {
+      return escapeHtml(refEn);
+    }
+    return evalResult.refDiffTokens
+      .map((tok) => {
+        if (tok.status === "matched") {
+          return `<span class="px-1 rounded bg-emerald-500/25 text-emerald-300 border-b border-emerald-400 font-semibold" title="Matched key word">${escapeHtml(
+            tok.text
+          )}</span>`;
+        }
+        if (tok.status === "missed") {
+          return `<span class="px-1 rounded bg-amber-500/20 text-amber-300 border-b border-dashed border-amber-400" title="Missed or paraphrased key word">${escapeHtml(
+            tok.text
+          )}</span>`;
+        }
+        return escapeHtml(tok.text);
+      })
+      .join("");
+  }
+
+  function renderTranslateTab() {
+    const blocks = getActiveWorkbenchBlocks();
+    const lang = window.quizzlerStorage.data.targetLang;
+    const pageKey =
+      panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+
+    if (panelState.activeBlockCursor >= blocks.length) {
+      panelState.activeBlockCursor = 0;
+    }
+
+    // Mode toggle styles
+    const btnPageMode = document.getElementById("sp-trans-mode-page");
+    const btnCustomMode = document.getElementById("sp-trans-mode-custom");
+    const customBox = document.getElementById("sp-trans-custom-box");
+    if (btnPageMode && btnCustomMode) {
+      const isPage = panelState.translateMode === "page";
+      btnPageMode.className = isPage
+        ? "pro-btn px-2.5 py-1 rounded-xl text-[10.5px] font-bold bg-yellow-400/20 text-yellow-300 border-yellow-400/40"
+        : "pro-btn px-2.5 py-1 rounded-xl text-[10.5px] font-semibold text-zinc-400";
+      btnCustomMode.className = !isPage
+        ? "pro-btn px-2.5 py-1 rounded-xl text-[10.5px] font-bold bg-yellow-400/20 text-yellow-300 border-yellow-400/40"
+        : "pro-btn px-2.5 py-1 rounded-xl text-[10.5px] font-semibold text-zinc-400";
+    }
+    if (customBox) {
+      customBox.classList.toggle("hidden", panelState.translateMode !== "custom");
+    }
+
+    // Compute progress stats
+    const stats = window.quizzlerStorage.getPageTranslationStats(pageKey, blocks.length);
+    const statsLine = document.getElementById("sp-trans-stats-line");
+    const avgBadge = document.getElementById("sp-trans-avg-badge");
+    const progBar = document.getElementById("sp-trans-progress-bar");
+
+    if (statsLine) {
+      statsLine.textContent = `${stats.translatedCount} / ${stats.totalBlocks} blocks translated (${stats.percentTranslated}%)`;
+    }
+    if (avgBadge) {
+      avgBadge.textContent =
+        stats.scoredCount > 0 ? `★ ${stats.avgScore} / 4` : "★ -- / 4";
+    }
+    if (progBar) {
+      progBar.style.width = `${stats.percentTranslated}%`;
+    }
+
+    // Populate block selector dropdown
+    const selectEl = document.getElementById("sp-trans-block-select");
+    if (selectEl) {
+      selectEl.innerHTML = blocks
+        .map((b, idx) => {
+          const bIdx = b.blockIndex ?? idx;
+          const saved = window.quizzlerStorage.getPageBlockData(pageKey, bIdx);
+          const statusTag =
+            saved.score !== null && saved.score !== undefined
+              ? ` ★${saved.score}/4`
+              : saved.text && saved.text.trim()
+              ? " • Draft"
+              : "";
+          const preview = (b.sourceText || "").slice(0, 28).replace(/\s+/g, " ");
+          return `<option value="${idx}" ${
+            idx === panelState.activeBlockCursor ? "selected" : ""
+          }>Block #${idx + 1}${statusTag} — ${escapeHtml(preview)}…</option>`;
+        })
+        .join("");
+    }
+
+    const activeBlock = blocks[panelState.activeBlockCursor];
+    if (!activeBlock) return;
+
+    const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+    const saved = window.quizzlerStorage.getPageBlockData(pageKey, bIdx);
+    const sourceText = activeBlock.sourceText || "";
+    const refEn = activeBlock.referenceText || saved.referenceText || "";
+
+    const blockLabel = document.getElementById("sp-trans-block-label");
+    if (blockLabel) {
+      blockLabel.textContent = `Block #${panelState.activeBlockCursor + 1} of ${
+        blocks.length
+      } • Click any word to inspect`;
+    }
+
+    const sourceTokensEl = document.getElementById("sp-trans-source-tokens");
+    if (sourceTokensEl) {
+      sourceTokensEl.innerHTML = tokenizeSidePanelPassage(sourceText, lang);
+      sourceTokensEl.querySelectorAll(".sp-source-word").forEach((wordSpan) => {
+        wordSpan.addEventListener("click", async () => {
+          const rawW = decodeURIComponent(wordSpan.getAttribute("data-word") || "");
+          if (!rawW) return;
+          window.quizzlerSound.speak(rawW, lang);
+          const meta = await window.quizzlerStorage.lookupWordWithLiveFallback(
+            rawW,
+            lang,
+            sourceText,
+            refEn
+          );
+          if (meta) {
+            panelState.currentWord = meta;
+            await window.quizzlerStorage.setSelectedWord(meta);
+            const peekBox = document.getElementById("sp-trans-word-peek");
+            const peekWord = document.getElementById("sp-trans-peek-word");
+            const peekEn = document.getElementById("sp-trans-peek-en");
+            if (peekBox && peekWord && peekEn) {
+              peekBox.classList.remove("hidden");
+              peekWord.textContent = meta.word;
+              peekEn.textContent = meta.en;
+            }
+          }
+        });
+      });
+    }
+
+    // Reset glossary box when switching blocks
+    const glossaryBox = document.getElementById("sp-trans-glossary-box");
+    if (glossaryBox && glossaryBox.getAttribute("data-block-key") !== `${pageKey}_${bIdx}`) {
+      glossaryBox.classList.add("hidden");
+      glossaryBox.removeAttribute("data-loaded");
+      glossaryBox.setAttribute("data-block-key", `${pageKey}_${bIdx}`);
+    }
+
+    const draftInput = document.getElementById("sp-trans-draft-input");
+    if (draftInput && document.activeElement !== draftInput) {
+      draftInput.value = saved.text || "";
+    }
+
+    const matchBadge = document.getElementById("sp-trans-match-badge");
+    if (matchBadge) {
+      if (saved.text && saved.text.trim() && refEn) {
+        const evalRes = window.quizzlerStorage.evaluateTranslationMatch(saved.text, refEn);
+        matchBadge.classList.remove("hidden");
+        matchBadge.textContent = `🎯 ${evalRes.matchPct}% Match`;
+      } else {
+        matchBadge.classList.add("hidden");
+      }
+    }
+
+    // Star buttons
+    document.querySelectorAll(".sp-trans-star-btn").forEach((btn) => {
+      const sc = Number(btn.getAttribute("data-score"));
+      const isAct = saved.score === sc;
+      btn.className = isAct
+        ? "sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold bg-yellow-400/25 text-yellow-300 border-yellow-400"
+        : "sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold text-zinc-400";
+    });
+
+    // Reference box
+    const isRevealed =
+      !window.quizzlerStorage.data.immersionMode ||
+      panelState.revealedSideBlocks.has(`${pageKey}_${bIdx}`) ||
+      Boolean(saved.text && saved.text.trim());
+    const refBox = document.getElementById("sp-trans-ref-box");
+    const refTextEl = document.getElementById("sp-trans-ref-text");
+    const revealBtn = document.getElementById("sp-trans-btn-reveal");
+
+    if (refBox) {
+      refBox.classList.toggle("hidden", !isRevealed);
+    }
+    if (revealBtn) {
+      revealBtn.textContent = isRevealed ? "🙈 Hide Ref" : "👁️ Peek Ref";
+    }
+    if (refTextEl) {
+      refTextEl.innerHTML = renderSideDiffReference(saved.text || "", refEn);
+    }
+  }
+
+  async function ensureActiveSideBlockReference() {
+    const blocks = getActiveWorkbenchBlocks();
+    const activeBlock = blocks[panelState.activeBlockCursor];
+    if (!activeBlock) return "";
+
+    const pageKey =
+      panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+    const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+    const saved = window.quizzlerStorage.getPageBlockData(pageKey, bIdx);
+
+    if (activeBlock.referenceText) return activeBlock.referenceText;
+    if (saved.referenceText) {
+      activeBlock.referenceText = saved.referenceText;
+      return saved.referenceText;
+    }
+
+    const lang = window.quizzlerStorage.data.targetLang;
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: "TRANSLATE_SINGLE",
+        text: activeBlock.sourceText,
+        sourceLang: lang,
+        targetLang: "en"
+      });
+      if (res?.translatedText) {
+        activeBlock.referenceText = res.translatedText;
+        return res.translatedText;
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  async function checkAndCompareSideBlock() {
+    const blocks = getActiveWorkbenchBlocks();
+    const activeBlock = blocks[panelState.activeBlockCursor];
+    if (!activeBlock) return;
+
+    const pageKey =
+      panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+    const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+    const draftInput = document.getElementById("sp-trans-draft-input");
+    const userDraft = (draftInput?.value || "").trim();
+
+    const refEn = await ensureActiveSideBlockReference();
+    await window.quizzlerStorage.savePageBlockTranslation(
+      pageKey,
+      bIdx,
+      userDraft,
+      activeBlock.sourceText,
+      refEn
+    );
+
+    panelState.revealedSideBlocks.add(`${pageKey}_${bIdx}`);
+    const evalRes = window.quizzlerStorage.evaluateTranslationMatch(userDraft, refEn);
+
+    if (userDraft && evalRes.suggestedScore !== null) {
+      const saved = window.quizzlerStorage.getPageBlockData(pageKey, bIdx);
+      const scoreToApply =
+        saved.score !== null && saved.score !== undefined
+          ? saved.score
+          : evalRes.suggestedScore;
+      await window.quizzlerStorage.savePageBlockScore(
+        pageKey,
+        bIdx,
+        scoreToApply,
+        activeBlock.sourceText,
+        refEn
+      );
+      if (scoreToApply >= 3) {
+        window.quizzlerSound.playCorrectChime();
+      } else {
+        window.quizzlerSound.playHintChime();
+      }
+      showToast(`🎯 ${evalRes.matchPct}% Match! Rated ★ ${scoreToApply}/4`);
+    } else {
+      window.quizzlerSound.playHintChime();
+    }
+
+    renderTranslateTab();
+  }
+
+  async function exportSidePanelManuscript() {
+    if (panelState.translateMode === "page") {
+      const res = await sendToActiveTab({ type: "EXPORT_PAGE_MANUSCRIPT" });
+      if (res?.ok) {
+        showToast(`📄 Copied Bilingual Manuscript (${res.count} blocks) to clipboard!`);
+        return;
+      }
+    }
+
+    const blocks = getActiveWorkbenchBlocks();
+    const pageKey =
+      panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+    const lang = window.quizzlerStorage.data.targetLang;
+    const cfg = window.quizzlerStorage.getLangConfig(lang);
+
+    const lines = [
+      `# Quizzler Bilingual Translation Manuscript (${cfg.flag} ${cfg.name})`,
+      `- **Exported**: ${new Date().toLocaleString()}`,
+      ""
+    ];
+
+    let count = 0;
+    blocks.forEach((b, i) => {
+      const bIdx = b.blockIndex ?? i;
+      const saved = window.quizzlerStorage.getPageBlockData(pageKey, bIdx);
+      if ((saved.text && saved.text.trim()) || saved.score !== null) {
+        count++;
+        lines.push(`### Block #${i + 1}${saved.score !== null ? ` (★ ${saved.score}/4)` : ""}`);
+        lines.push(`> **Source (${lang.toUpperCase()})**: ${b.sourceText}`);
+        lines.push("");
+        lines.push(`- **My Translation**: ${saved.text || "_No draft_"}`);
+        if (b.referenceText || saved.referenceText) {
+          lines.push(`- **Reference (EN)**: ${b.referenceText || saved.referenceText}`);
+        }
+        lines.push("");
+      }
+    });
+
+    if (count === 0) {
+      showToast("⚠️ Translate at least one block first to export your manuscript!");
+      return;
+    }
+
+    await navigator.clipboard.writeText(lines.join("\n"));
+    window.quizzlerSound.playCorrectChime();
+    showToast(`📄 Copied Bilingual Manuscript (${count} blocks) to clipboard!`);
+  }
+
+  // ==========================================
   // EVENTS & ACTIVE TAB MESSAGING
   // ==========================================
 
@@ -939,13 +1440,16 @@
     document.querySelectorAll(".sp-nav-tab").forEach((btn) => {
       const isAct = btn.getAttribute("data-tab") === tabName;
       btn.className = isAct
-        ? "sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80"
-        : "sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white";
+        ? "sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80"
+        : "sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white";
     });
 
     document
       .getElementById("sp-view-inspector")
       ?.classList.toggle("hidden", tabName !== "inspector");
+    document
+      .getElementById("sp-view-translate")
+      ?.classList.toggle("hidden", tabName !== "translate");
     document
       .getElementById("sp-view-flashcards")
       ?.classList.toggle("hidden", tabName !== "flashcards");
@@ -956,7 +1460,13 @@
       .getElementById("sp-view-vault")
       ?.classList.toggle("hidden", tabName !== "vault");
 
-    if (tabName === "flashcards") {
+    if (tabName === "translate") {
+      if (panelState.translateMode === "page") {
+        syncBlocksFromActivePage();
+      } else {
+        renderTranslateTab();
+      }
+    } else if (tabName === "flashcards") {
       loadFlashcardDeck(panelState.cardFilter);
     } else if (tabName === "sites") {
       renderSitesTab();
@@ -971,6 +1481,9 @@
       initDefaultWord();
       loadFlashcardDeck("all");
       await refreshActiveTabStatus();
+      if (panelState.activeTab === "translate") {
+        await syncBlocksFromActivePage();
+      }
       renderAll();
     });
 
@@ -986,8 +1499,295 @@
     });
 
     // Unified Smart Immerse Button (auto-detects native vs translate)
-    document.getElementById("sp-btn-immerse-page")?.addEventListener("click", () => {
-      sendToActiveTab({ type: "TRIGGER_SMART_IMMERSE_PAGE" });
+    document.getElementById("sp-btn-immerse-page")?.addEventListener("click", async () => {
+      await sendToActiveTab({ type: "TRIGGER_SMART_IMMERSE_PAGE" });
+      if (panelState.activeTab === "translate") {
+        await syncBlocksFromActivePage();
+      }
+    });
+
+    // On-Page Translator Mode Toggle Button
+    document
+      .getElementById("sp-btn-translator-mode")
+      ?.addEventListener("click", async () => {
+        const res = await sendToActiveTab({ type: "TOGGLE_TRANSLATOR_MODE" });
+        if (res?.ok) {
+          await syncBlocksFromActivePage();
+        }
+      });
+
+    // Translator Workbench Tab Controls
+    document.getElementById("sp-trans-mode-page")?.addEventListener("click", () => {
+      panelState.translateMode = "page";
+      syncBlocksFromActivePage();
+    });
+
+    document.getElementById("sp-trans-mode-custom")?.addEventListener("click", () => {
+      panelState.translateMode = "custom";
+      renderTranslateTab();
+    });
+
+    document.getElementById("sp-trans-btn-refresh")?.addEventListener("click", () => {
+      panelState.translateMode = "page";
+      syncBlocksFromActivePage();
+      showToast("🔄 Synced blocks from active webpage.");
+    });
+
+    document.getElementById("sp-trans-btn-export")?.addEventListener("click", () => {
+      exportSidePanelManuscript();
+    });
+
+    document
+      .getElementById("sp-trans-btn-load-custom")
+      ?.addEventListener("click", async () => {
+        const input = document.getElementById("sp-trans-custom-input");
+        const raw = (input?.value || "").trim();
+        if (!raw) {
+          showToast("Paste a paragraph or story excerpt first!");
+          return;
+        }
+        const paragraphs = raw
+          .split(/\n\s*\n+|\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s.length >= 4);
+        panelState.customBlocks = paragraphs.map((p, idx) => ({
+          blockIndex: idx,
+          sourceText: p,
+          referenceText: ""
+        }));
+        panelState.translateMode = "custom";
+        panelState.activeBlockCursor = 0;
+        renderTranslateTab();
+        showToast(`✍️ Loaded ${panelState.customBlocks.length} block(s) into Workbench!`);
+      });
+
+    document.getElementById("sp-trans-prev")?.addEventListener("click", () => {
+      const blocks = getActiveWorkbenchBlocks();
+      if (blocks.length === 0) return;
+      panelState.activeBlockCursor =
+        (panelState.activeBlockCursor - 1 + blocks.length) % blocks.length;
+      renderTranslateTab();
+    });
+
+    document.getElementById("sp-trans-next")?.addEventListener("click", () => {
+      const blocks = getActiveWorkbenchBlocks();
+      if (blocks.length === 0) return;
+      panelState.activeBlockCursor = (panelState.activeBlockCursor + 1) % blocks.length;
+      renderTranslateTab();
+    });
+
+    document.getElementById("sp-trans-block-select")?.addEventListener("change", (e) => {
+      panelState.activeBlockCursor = Number(e.target.value) || 0;
+      renderTranslateTab();
+    });
+
+    document.getElementById("sp-trans-scroll-page")?.addEventListener("click", () => {
+      const blocks = getActiveWorkbenchBlocks();
+      const activeBlock = blocks[panelState.activeBlockCursor];
+      if (!activeBlock) return;
+      const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+      sendToActiveTab({
+        type: "SCROLL_TO_BLOCK",
+        blockIndex: bIdx,
+        openWorkbench: true
+      });
+    });
+
+    document.getElementById("sp-trans-btn-speak")?.addEventListener("click", () => {
+      const blocks = getActiveWorkbenchBlocks();
+      const activeBlock = blocks[panelState.activeBlockCursor];
+      if (activeBlock?.sourceText) {
+        window.quizzlerSound.speak(
+          activeBlock.sourceText,
+          window.quizzlerStorage.data.targetLang
+        );
+      }
+    });
+
+    document.getElementById("sp-trans-peek-open-insp")?.addEventListener("click", () => {
+      switchTab("inspector");
+      renderInspectorTab();
+    });
+
+    document
+      .getElementById("sp-trans-btn-glossary")
+      ?.addEventListener("click", async () => {
+        const glossaryBox = document.getElementById("sp-trans-glossary-box");
+        if (!glossaryBox) return;
+        if (!glossaryBox.classList.contains("hidden")) {
+          glossaryBox.classList.add("hidden");
+          return;
+        }
+        glossaryBox.classList.remove("hidden");
+        if (glossaryBox.getAttribute("data-loaded") === "1") return;
+
+        const blocks = getActiveWorkbenchBlocks();
+        const activeBlock = blocks[panelState.activeBlockCursor];
+        if (!activeBlock?.sourceText) return;
+
+        const lang = window.quizzlerStorage.data.targetLang;
+        const rawWords =
+          lang === "ja"
+            ? activeBlock.sourceText.match(/[一-龯々〆ヵヶ]{1,4}[ぁ-ん]{0,2}|[ァ-ヶー]{2,}/g) ||
+              []
+            : activeBlock.sourceText.match(/[a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]{4,}/g) || [];
+        const uniqueWords = Array.from(new Set(rawWords)).slice(0, 8);
+
+        if (uniqueWords.length === 0) {
+          glossaryBox.innerHTML = `<span class="text-[11px] text-zinc-400">Click any word in the source passage above to inspect its meaning.</span>`;
+          return;
+        }
+
+        glossaryBox.innerHTML = `<span class="text-[11px] text-yellow-300">⏳ Loading vocabulary hints...</span>`;
+        const refEn = await ensureActiveSideBlockReference();
+        const chips = [];
+
+        for (const w of uniqueWords) {
+          const meta = await window.quizzlerStorage.lookupWordWithLiveFallback(
+            w,
+            lang,
+            activeBlock.sourceText,
+            refEn
+          );
+          if (meta && meta.en) {
+            chips.push(`
+              <button type="button" class="sp-glossary-chip px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-yellow-400 text-[11px] flex items-center gap-1 transition" data-word="${encodeURIComponent(
+                meta.word
+              )}">
+                <strong class="text-yellow-300">${escapeHtml(meta.word)}</strong>
+                <span class="text-zinc-500">→</span>
+                <span class="text-zinc-200">${escapeHtml(meta.en)}</span>
+              </button>
+            `);
+          }
+        }
+
+        glossaryBox.setAttribute("data-loaded", "1");
+        glossaryBox.innerHTML =
+          chips.length > 0
+            ? chips.join("")
+            : `<span class="text-[11px] text-zinc-400">Click any word in the passage above for live lookup.</span>`;
+
+        glossaryBox.querySelectorAll(".sp-glossary-chip").forEach((chip) => {
+          chip.addEventListener("click", async () => {
+            const w = decodeURIComponent(chip.getAttribute("data-word") || "");
+            if (!w) return;
+            const meta = await window.quizzlerStorage.lookupWordWithLiveFallback(
+              w,
+              lang,
+              activeBlock.sourceText,
+              refEn
+            );
+            if (meta) {
+              panelState.currentWord = meta;
+              await window.quizzlerStorage.setSelectedWord(meta);
+              window.quizzlerSound.speak(meta.word, lang);
+              showToast(`📖 ${meta.word} : ${meta.en}`);
+            }
+          });
+        });
+      });
+
+    document
+      .getElementById("sp-trans-draft-input")
+      ?.addEventListener("input", async (e) => {
+        const blocks = getActiveWorkbenchBlocks();
+        const activeBlock = blocks[panelState.activeBlockCursor];
+        if (!activeBlock) return;
+        const pageKey =
+          panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+        const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+        await window.quizzlerStorage.savePageBlockTranslation(
+          pageKey,
+          bIdx,
+          e.target.value,
+          activeBlock.sourceText,
+          activeBlock.referenceText || ""
+        );
+      });
+
+    document
+      .getElementById("sp-trans-draft-input")
+      ?.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          checkAndCompareSideBlock();
+        }
+      });
+
+    document
+      .getElementById("sp-trans-btn-check")
+      ?.addEventListener("click", () => checkAndCompareSideBlock());
+
+    document
+      .getElementById("sp-trans-btn-reveal")
+      ?.addEventListener("click", async () => {
+        const blocks = getActiveWorkbenchBlocks();
+        const activeBlock = blocks[panelState.activeBlockCursor];
+        if (!activeBlock) return;
+        const pageKey =
+          panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+        const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+        const key = `${pageKey}_${bIdx}`;
+
+        if (panelState.revealedSideBlocks.has(key)) {
+          panelState.revealedSideBlocks.delete(key);
+        } else {
+          await ensureActiveSideBlockReference();
+          panelState.revealedSideBlocks.add(key);
+          window.quizzlerSound.playHintChime();
+        }
+        renderTranslateTab();
+      });
+
+    document
+      .getElementById("sp-trans-btn-next-untranslated")
+      ?.addEventListener("click", () => {
+        const blocks = getActiveWorkbenchBlocks();
+        if (blocks.length === 0) return;
+        const pageKey =
+          panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+
+        let foundIdx = -1;
+        for (let i = 1; i <= blocks.length; i++) {
+          const cand = (panelState.activeBlockCursor + i) % blocks.length;
+          const bIdx = blocks[cand].blockIndex ?? cand;
+          const saved = window.quizzlerStorage.getPageBlockData(pageKey, bIdx);
+          if (!saved?.text || !saved.text.trim()) {
+            foundIdx = cand;
+            break;
+          }
+        }
+        panelState.activeBlockCursor =
+          foundIdx >= 0 ? foundIdx : (panelState.activeBlockCursor + 1) % blocks.length;
+        renderTranslateTab();
+      });
+
+    document.querySelectorAll(".sp-trans-star-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const score = Number(btn.getAttribute("data-score"));
+        const blocks = getActiveWorkbenchBlocks();
+        const activeBlock = blocks[panelState.activeBlockCursor];
+        if (!activeBlock) return;
+        const pageKey =
+          panelState.translateMode === "custom" ? "custom_workbench" : panelState.pageKey;
+        const bIdx = activeBlock.blockIndex ?? panelState.activeBlockCursor;
+        const refEn = await ensureActiveSideBlockReference();
+        await window.quizzlerStorage.savePageBlockScore(
+          pageKey,
+          bIdx,
+          score,
+          activeBlock.sourceText,
+          refEn
+        );
+        if (score >= 3) {
+          window.quizzlerSound.playCorrectChime();
+        } else {
+          window.quizzlerSound.playTone(440, 0.12, "triangle", 0.12);
+        }
+        renderTranslateTab();
+        showToast(`Saved rating: ★ ${score} / 4`);
+      });
     });
 
     // Bookmark Active Tab Button

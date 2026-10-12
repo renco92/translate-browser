@@ -71,9 +71,14 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
-      <button id="sp-btn-toggle-overlay" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-zinc-300" title="Show or hide the floating Quizzler overlay bar on this webpage (Defaults to Off)">
+      <button id="sp-btn-translator-mode" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 text-yellow-300 border-yellow-400/40" title="Toggle On-Page Translator Workbench Mode (Translate blocks & track ★ score)">
+        <span>✍️</span>
+        <span id="sp-translator-mode-label">Translator Mode</span>
+      </button>
+
+      <button id="sp-btn-toggle-overlay" class="pro-btn px-2 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-zinc-300" title="Show or hide the floating Quizzler overlay bar on this webpage (Defaults to Off)">
         <span>🧭</span>
-        <span id="sp-overlay-label">Overlay Bar: Off</span>
+        <span id="sp-overlay-label">Bar: Off</span>
       </button>
 
       <button id="sp-btn-immersion-mode" class="pro-btn px-2 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-yellow-300 border-yellow-400/40">
@@ -82,7 +87,7 @@
       </button>
 
       <button id="sp-btn-restore-page" class="pro-btn px-2 py-1 rounded-xl text-[11px] font-semibold text-zinc-300" title="Restore original webpage">
-        🔄 Restore
+        🔄
       </button>
     </div>
 
@@ -101,18 +106,21 @@
   </section>
 
   <!-- Primary Navigation Tabs -->
-  <nav class="shrink-0 px-3 pt-2 border-b border-zinc-800/80 flex items-center gap-1 bg-zinc-950/60">
-    <button data-tab="inspector" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80">
+  <nav class="shrink-0 px-2.5 pt-2 border-b border-zinc-800/80 flex items-center gap-1 bg-zinc-950/60">
+    <button data-tab="inspector" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80">
       📖 Inspect
     </button>
-    <button data-tab="flashcards" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+    <button data-tab="translate" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+      ✍️ Translate
+    </button>
+    <button data-tab="flashcards" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
       🗂️ Cards
     </button>
-    <button data-tab="sites" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+    <button data-tab="sites" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
       🔖 Sites
     </button>
-    <button data-tab="vault" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
-      🏦 Vault (<span id="sp-tab-vault-count">5</span>)
+    <button data-tab="vault" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[10.5px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+      🏦 (<span id="sp-tab-vault-count">5</span>)
     </button>
   </nav>
 
@@ -203,7 +211,186 @@
     </div>
 
     <!-- ==========================================
-         TAB 2: 3D TACTILE FLASHCARDS TRAINER
+         TAB 2: TRANSLATOR WORKBENCH (BLOCK-BY-BLOCK)
+         ========================================== -->
+    <div id="sp-view-translate" class="hidden space-y-3">
+      <!-- Page Translation Progress & Score Banner -->
+      <div class="pro-card rounded-3xl p-3.5 space-y-2 border border-yellow-400/35">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs">✍️</span>
+              <span class="text-xs font-display font-bold text-white">Translator Progress</span>
+            </div>
+            <p id="sp-trans-stats-line" class="text-[11px] text-zinc-300 font-semibold mt-0.5">
+              0 / 0 blocks translated (0%)
+            </p>
+          </div>
+          <div class="text-right">
+            <span id="sp-trans-avg-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              ★ -- / 4
+            </span>
+          </div>
+        </div>
+
+        <div class="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden border border-zinc-800">
+          <div id="sp-trans-progress-bar" class="h-full bg-gradient-to-r from-yellow-400 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+        </div>
+
+        <div class="flex items-center justify-between gap-1.5 pt-0.5">
+          <div class="flex items-center gap-1">
+            <button type="button" id="sp-trans-mode-page" class="pro-btn px-2.5 py-1 rounded-xl text-[10.5px] font-bold bg-yellow-400/20 text-yellow-300 border-yellow-400/40">
+              🌐 Webpage Blocks
+            </button>
+            <button type="button" id="sp-trans-mode-custom" class="pro-btn px-2.5 py-1 rounded-xl text-[10.5px] font-semibold text-zinc-400">
+              📝 Paste Text
+            </button>
+          </div>
+          <div class="flex items-center gap-1">
+            <button type="button" id="sp-trans-btn-refresh" class="pro-btn px-2 py-1 rounded-xl text-[10.5px] text-zinc-300" title="Sync blocks from active webpage">
+              🔄 Sync
+            </button>
+            <button type="button" id="sp-trans-btn-export" class="pro-btn px-2 py-1 rounded-xl text-[10.5px] font-bold text-yellow-300 border-yellow-400/30" title="Copy Bilingual Translation Manuscript (Markdown) to clipboard">
+              📄 Export
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Passage Paste Box (Shown when 'Paste Text' mode is active) -->
+      <div id="sp-trans-custom-box" class="hidden pro-card rounded-3xl p-3.5 space-y-2 border border-zinc-700/80">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-yellow-400 font-bold">
+            📝 Paste Passage to Practice Translating
+          </span>
+          <span class="text-[10px] text-zinc-400">Splits by paragraph</span>
+        </div>
+        <textarea
+          id="sp-trans-custom-input"
+          rows="3"
+          placeholder="Paste a paragraph, story excerpt, or article in French, Japanese, Spanish, German, or Italian..."
+          class="pro-input w-full p-2.5 rounded-xl text-xs leading-relaxed"
+        ></textarea>
+        <button type="button" id="sp-trans-btn-load-custom" class="pro-btn w-full py-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs">
+          ✍️ Load into Translator Workbench
+        </button>
+      </div>
+
+      <!-- Block Navigation Bar -->
+      <div class="flex items-center justify-between gap-1.5">
+        <button type="button" id="sp-trans-prev" class="pro-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold">
+          ← Prev
+        </button>
+        <select id="sp-trans-block-select" class="pro-input flex-1 px-2.5 py-1.5 rounded-xl text-[11px] font-mono font-bold text-yellow-300 cursor-pointer">
+          <option value="0">Block #1</option>
+        </select>
+        <button type="button" id="sp-trans-next" class="pro-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold">
+          Next →
+        </button>
+        <button type="button" id="sp-trans-scroll-page" class="pro-btn px-2 py-1.5 rounded-xl text-[11px] text-yellow-300" title="Scroll webpage to this block & open on-page workbench">
+          🎯
+        </button>
+      </div>
+
+      <!-- Active Source Block & Translator Workbench Card -->
+      <div class="pro-card rounded-3xl p-4 space-y-3 border border-zinc-700/80">
+        <div class="flex items-center justify-between gap-2">
+          <span id="sp-trans-block-label" class="text-[10px] font-mono uppercase tracking-wider text-yellow-400 font-bold">
+            Source Passage • Click any word to inspect
+          </span>
+          <div class="flex items-center gap-1">
+            <button type="button" id="sp-trans-btn-glossary" class="pro-btn px-2 py-0.5 rounded-lg text-[10px] font-bold text-yellow-300 border-yellow-400/30" title="Show vocabulary glossary hints for this block">
+              💡 Hints
+            </button>
+            <button type="button" id="sp-trans-btn-speak" class="pro-btn px-2 py-0.5 rounded-lg text-[10px] text-yellow-400" title="Listen to passage">
+              🔊 Listen
+            </button>
+          </div>
+        </div>
+
+        <!-- Interactive Tokenized Source Passage -->
+        <div id="sp-trans-source-tokens" class="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-sm text-zinc-100 leading-relaxed jp-font select-text">
+          Select or immerse a webpage to load blocks, or click "📝 Paste Text" above.
+        </div>
+
+        <!-- Quick Word Lookup Pill (Appears when clicking a word token inside the source passage) -->
+        <div id="sp-trans-word-peek" class="hidden p-2.5 rounded-xl bg-zinc-950 border border-yellow-400/40 flex items-center justify-between gap-2 text-xs">
+          <div class="min-w-0">
+            <span id="sp-trans-peek-word" class="font-bold text-yellow-300"></span>
+            <span class="text-zinc-500 mx-1">→</span>
+            <span id="sp-trans-peek-en" class="text-zinc-100 font-semibold"></span>
+          </div>
+          <button type="button" id="sp-trans-peek-open-insp" class="pro-btn px-2 py-0.5 rounded-lg text-[10px] text-yellow-300 shrink-0">
+            📖 Full Card
+          </button>
+        </div>
+
+        <!-- Collapsible Vocabulary Glossary Hints -->
+        <div id="sp-trans-glossary-box" class="hidden p-2.5 rounded-2xl bg-zinc-950/90 border border-dashed border-yellow-400/35 flex flex-wrap gap-1.5"></div>
+
+        <!-- Translator Draft Input -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+              Your English Translation
+            </span>
+            <span id="sp-trans-match-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              🎯 0% Match
+            </span>
+          </div>
+          <textarea
+            id="sp-trans-draft-input"
+            rows="3"
+            placeholder="Write your English translation here... (Press Ctrl+Enter to Check & Compare)"
+            class="pro-input w-full p-3 rounded-2xl text-xs leading-relaxed text-zinc-100 placeholder-zinc-500"
+          ></textarea>
+        </div>
+
+        <!-- Action Buttons: Check & Compare + Peek Reference + Next Untranslated -->
+        <div class="flex items-center justify-between gap-1.5 flex-wrap">
+          <button type="button" id="sp-trans-btn-check" class="pro-btn flex-1 py-2 px-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1 shadow">
+            🔍 Check & Compare
+          </button>
+          <button type="button" id="sp-trans-btn-reveal" class="pro-btn py-2 px-2.5 rounded-xl text-[11px] font-semibold text-zinc-300">
+            👁️ Peek Ref
+          </button>
+          <button type="button" id="sp-trans-btn-next-untranslated" class="pro-btn py-2 px-2.5 rounded-xl text-[11px] font-bold text-yellow-300 border-yellow-400/30" title="Jump to next untranslated block">
+            🎯 Next
+          </button>
+        </div>
+
+        <!-- 0★ to 4★ Self-Assessment Bar -->
+        <div class="pt-1 border-t border-zinc-800/80 space-y-1.5">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block">
+            Self-Rating (0★–4★)
+          </span>
+          <div class="grid grid-cols-5 gap-1">
+            <button type="button" data-score="0" class="sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold text-zinc-400">0★ None</button>
+            <button type="button" data-score="1" class="sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold text-zinc-400">1★ Words</button>
+            <button type="button" data-score="2" class="sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold text-zinc-400">2★ Gist</button>
+            <button type="button" data-score="3" class="sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold text-zinc-400">3★ Close</button>
+            <button type="button" data-score="4" class="sp-trans-star-btn pro-btn py-1.5 rounded-xl text-[10px] font-bold text-zinc-400">4★ Exact</button>
+          </div>
+        </div>
+
+        <!-- Reference Translation & Word-by-Word Diff Box -->
+        <div id="sp-trans-ref-box" class="hidden p-3 rounded-2xl bg-zinc-900/90 border-l-4 border-emerald-400 space-y-1.5">
+          <div class="flex items-center justify-between gap-1 flex-wrap">
+            <span class="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
+              Reference Translation & Word Diff
+            </span>
+            <span class="text-[9.5px] text-zinc-400">
+              <span class="px-1 rounded bg-emerald-500/20 text-emerald-300 border-b border-emerald-400">Matched</span> •
+              <span class="px-1 rounded bg-amber-500/20 text-amber-300 border-b border-dashed border-amber-400">Missed</span>
+            </span>
+          </div>
+          <div id="sp-trans-ref-text" class="text-xs text-zinc-200 leading-relaxed"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         TAB 3: 3D TACTILE FLASHCARDS TRAINER
          ========================================== -->
     <div id="sp-view-flashcards" class="hidden space-y-3">
       <div class="flex items-center justify-between gap-1.5">
