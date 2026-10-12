@@ -36,12 +36,15 @@
     </div>
 
     <!-- Center Mode Switcher -->
-    <div class="flex items-center gap-2 bg-zinc-900/90 p-1 rounded-2xl border border-zinc-800">
-      <button id="st-mode-cards" class="px-4 py-1.5 rounded-xl text-xs font-bold bg-yellow-400 text-zinc-950 transition">
-        🗂️ 3D Flashcards Studio
+    <div class="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-2xl border border-zinc-800">
+      <button id="st-mode-cards" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-yellow-400 text-zinc-950 transition">
+        🗂️ 3D Flashcards
       </button>
-      <button id="st-mode-reader" class="px-4 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition">
-        📖 Custom Article & Text Reader
+      <button id="st-mode-reader" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition">
+        📖 Custom Reader
+      </button>
+      <button id="st-mode-sites" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition">
+        🔖 Bookmarks & Native Sites
       </button>
     </div>
 
@@ -105,7 +108,7 @@
       <div id="st-vault-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs"></div>
     </aside>
 
-    <!-- Center Surface: Mode 1 (3D Flashcards) OR Mode 2 (Custom Article Reader) -->
+    <!-- Center Surface: Mode 1 (3D Flashcards), Mode 2 (Custom Article Reader), Mode 3 (Bookmarks & Native Sites) -->
     <main class="flex-1 flex flex-col min-w-0 min-h-0">
 
       <!-- ==========================================
@@ -212,7 +215,7 @@
         <div class="pb-3 mb-3 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 class="text-lg font-display font-bold text-white">Custom Web Text & Article Reader</h2>
-            <p class="text-xs text-zinc-400">Paste any article or text to translate into your target language, click words, and practice sentence-by-sentence translation.</p>
+            <p class="text-xs text-zinc-400">Paste any article or text to auto-detect language, click words, and practice sentence-by-sentence translation.</p>
           </div>
           <div class="flex items-center gap-2">
             <button id="st-btn-toggle-paste" class="pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold text-yellow-300">
@@ -225,17 +228,54 @@
         <div id="st-paste-box" class="mb-4 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-2.5">
           <textarea id="st-paste-input" rows="4" class="pro-input w-full p-3 rounded-xl text-xs leading-relaxed" placeholder="Paste any English or target-language article, story, or paragraphs here..."></textarea>
           <div class="flex flex-wrap items-center justify-end gap-2">
-            <button id="st-btn-tokenize-raw" class="pro-btn px-4 py-2 rounded-xl text-xs font-semibold">
-              🔍 Tokenize As-Is (Already in Target Language)
-            </button>
-            <button id="st-btn-translate-raw" class="pro-btn px-4 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs shadow">
-              🌐 Translate to Target Language & Tokenize
+            <button id="st-btn-immerse-raw" class="pro-btn px-5 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs shadow">
+              ✨ Immerse Text (Auto-Detect Native or Translate)
             </button>
           </div>
         </div>
 
         <!-- Reader Sentences Container -->
         <div id="st-reader-sentences" class="flex-1 overflow-y-auto space-y-3.5 pr-2"></div>
+      </div>
+
+      <!-- ==========================================
+           VIEW 3: BOOKMARKED LEARNING PAGES & NATIVE SITES
+           ========================================== -->
+      <div id="st-surface-sites" class="hidden pro-card flex-1 rounded-3xl p-5 sm:p-7 flex flex-col min-h-0 overflow-y-auto border border-zinc-700/60 space-y-6">
+        <!-- Bookmarked Pages -->
+        <div class="space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+            <div>
+              <h2 class="text-lg font-display font-bold text-white flex items-center gap-2">
+                <span>🔖</span>
+                <span>Your Bookmarked Learning Pages</span>
+              </h2>
+              <p class="text-xs text-zinc-400">Saved web pages and stories for active reading & immersion</p>
+            </div>
+            <form id="st-add-bookmark-form" class="flex items-center gap-2">
+              <input id="st-bookmark-title" type="text" placeholder="Title (optional)..." class="pro-input px-3 py-1.5 rounded-xl text-xs w-40" />
+              <input id="st-bookmark-url" type="url" placeholder="https://gutenberg.net.au/..." class="pro-input px-3 py-1.5 rounded-xl text-xs w-64" required />
+              <button type="submit" class="pro-btn px-3.5 py-1.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs">
+                + Bookmark URL
+              </button>
+            </form>
+          </div>
+          <div id="st-bookmarks-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+
+        <!-- Recommended Native Sites -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+            <div>
+              <h2 class="text-lg font-display font-bold text-white flex items-center gap-2">
+                <span>🌟</span>
+                <span id="st-rec-title">Curated Native Sites for Language Learning</span>
+              </h2>
+              <p class="text-xs text-zinc-400">Hand-picked native literature, graded news, and folklore sites</p>
+            </div>
+          </div>
+          <div id="st-recommended-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
       </div>
 
     </main>

@@ -1,7 +1,7 @@
 /**
  * Quizzler Web Immersion & Flashcard Studio - Manifest V3 Service Worker
  * Handles Side Panel opening, Context Menus, Keyboard Shortcuts, Badge Updates,
- * and CORS-free Live Translation & Dictionary Lookups.
+ * and Multi-Tier Live Translation & Dictionary Lookups (Google GTX + Wiktionary + Contextual).
  */
 
 const STORAGE_KEY = "quizzler_ext_state_v1";
@@ -21,14 +21,20 @@ chrome.runtime.onInstalled.addListener(async () => {
     });
 
     chrome.contextMenus.create({
-      id: "quizzler-translate-page",
-      title: "Quizzler: Translate & Tokenize Page into Target Language",
+      id: "quizzler-immerse-page",
+      title: "Quizzler: Immerse Page (Auto-Detect Translate or Tokenize)",
       contexts: ["page"]
     });
 
     chrome.contextMenus.create({
-      id: "quizzler-tokenize-native",
-      title: "Quizzler: Tokenize Native Target-Language Page",
+      id: "quizzler-toggle-overlay",
+      title: "Quizzler: Toggle Floating Overlay Bar on This Site",
+      contexts: ["page"]
+    });
+
+    chrome.contextMenus.create({
+      id: "quizzler-bookmark-page",
+      title: "Quizzler: Bookmark This Page for Language Learning",
       contexts: ["page"]
     });
 
@@ -64,7 +70,7 @@ async function updateExtensionBadge() {
   }
 }
 
-// Context Menu Click Handler (Always confirms action to user via on-page toast)
+// Context Menu Click Handler
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
 
@@ -74,19 +80,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         type: "INSPECT_TEXT_SELECTION",
         text: info.selectionText.trim()
       });
-    } catch (e) {
-      // Content script might not be loaded on restricted pages
-    }
-  } else if (info.menuItemId === "quizzler-translate-page") {
+    } catch (e) {}
+  } else if (info.menuItemId === "quizzler-immerse-page") {
     try {
       await chrome.tabs.sendMessage(tab.id, {
-        type: "TRIGGER_TRANSLATE_PAGE"
+        type: "TRIGGER_SMART_IMMERSE_PAGE"
       });
     } catch (e) {}
-  } else if (info.menuItemId === "quizzler-tokenize-native") {
+  } else if (info.menuItemId === "quizzler-toggle-overlay") {
     try {
       await chrome.tabs.sendMessage(tab.id, {
-        type: "TRIGGER_TOKENIZE_NATIVE_PAGE"
+        type: "TOGGLE_FLOATING_BAR"
+      });
+    } catch (e) {}
+  } else if (info.menuItemId === "quizzler-bookmark-page") {
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "BOOKMARK_CURRENT_PAGE"
       });
     } catch (e) {}
   } else if (info.menuItemId === "quizzler-open-studio") {
@@ -101,15 +111,9 @@ chrome.commands.onCommand.addListener(async (command) => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
 
-  if (command === "translate-page") {
+  if (command === "translate-page" || command === "tokenize-native-page") {
     try {
-      await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_TRANSLATE_PAGE" });
-    } catch (e) {}
-  } else if (command === "tokenize-native-page") {
-    try {
-      await chrome.tabs.sendMessage(tab.id, {
-        type: "TRIGGER_TOKENIZE_NATIVE_PAGE"
-      });
+      await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_SMART_IMMERSE_PAGE" });
     } catch (e) {}
   }
 });
@@ -135,7 +139,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else if (message.type === "LOOKUP_LIVE_WORD") {
         const result = await lookupLiveWordDictionary(
           message.word || "",
-          message.lang || "fr"
+          message.lang || "fr",
+          message.contextSentence || ""
         );
         sendResponse({ ok: true, ...result });
       } else if (message.type === "OPEN_SIDE_PANEL") {
@@ -200,13 +205,11 @@ async function translateSingleText(text, sourceLang = "auto", targetLang = "fr")
 }
 
 /**
- * Translates an array of paragraph strings in a single separator-joined request
- * for fast webpage translation without rate-limiting.
+ * Translates an array of strings in a single separator-joined request.
  */
 async function translateTextBatch(texts, sourceLang = "auto", targetLang = "fr") {
   if (!Array.isArray(texts) || texts.length === 0) return [];
 
-  // Join paragraphs with a unique newline separator that preserves sentence boundaries
   const SEP = "\n ||| \n";
   const combined = texts.join(SEP);
 
@@ -256,23 +259,45 @@ async function translateTextBatch(texts, sourceLang = "auto", targetLang = "fr")
 }
 
 /**
- * Live Dictionary & Translation Lookup for unknown words on any webpage.
- * Queries Google Translate's dictionary (`dt=bd&dt=t&dt=rm`) to get English definitions,
- * part of speech, and phonetic reading.
+ * Strips French elisions (l', d', qu', s', n', j', c', m', t', jusqu', lorsqu')
+ * and trailing clitics so inflected/elided tokens resolve cleanly.
  */
-async function lookupLiveWordDictionary(word, lang = "fr") {
-  if (!word || !word.trim()) {
-    return { en: "", pos: "word" };
+function extractCleanLookupCandidates(rawWord, lang) {
+  const trimmed = String(rawWord || "")
+    .trim()
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
+    .replace(/^[.,\/#!$%\^&\*;:{}=\_~`()?"«»「」『』]+|[.,\/#!$%\^&\*;:{}=\_~`()?"«»「」『』]+$/g, "");
+
+  const candidates = [trimmed];
+  if (trimmed.toLowerCase() !== trimmed) {
+    candidates.push(trimmed.toLowerCase());
   }
 
+  if (lang === "fr") {
+    const noElision = trimmed
+      .replace(/^(jusqu'|lorsqu'|puisqu'|l'|d'|qu'|s'|c'|m'|t'|n'|j')/i, "")
+      .replace(/-(t-il|t-elle|t-on|moi|toi|lui|le|la|les|nous|vous|en|y|il|elle|on|ils|elles|je|tu|ce|la|ci)$/i, "");
+    if (noElision && !candidates.includes(noElision)) {
+      candidates.push(noElision);
+      if (noElision.toLowerCase() !== noElision) {
+        candidates.push(noElision.toLowerCase());
+      }
+    }
+  }
+
+  return candidates.filter(Boolean);
+}
+
+/**
+ * Queries Google Translate GTX dictionary endpoint (`dt=t&dt=bd&dt=at&dt=md&dt=rm`)
+ */
+async function queryGoogleGtxWord(queryWord, lang) {
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(
     lang
-  )}&tl=en&dt=t&dt=bd&dt=rm&q=${encodeURIComponent(word.trim())}`;
+  )}&tl=en&dt=t&dt=bd&dt=at&dt=md&dt=rm&q=${encodeURIComponent(queryWord)}`;
 
   const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Dictionary lookup HTTP ${response.status}`);
-  }
+  if (!response.ok) return null;
   const data = await response.json();
 
   let primaryTranslation = "";
@@ -281,31 +306,195 @@ async function lookupLiveWordDictionary(word, lang = "fr") {
     for (const seg of data[0]) {
       if (seg?.[0]) primaryTranslation += seg[0];
       if (seg?.[3]) transliteration += seg[3];
+      else if (seg?.[2]) transliteration += seg[2];
     }
   }
+  primaryTranslation = primaryTranslation.trim();
 
   let pos = "";
   let dictMeanings = [];
+  // data[1] is bilingual dictionary: [[pos, [gloss1, gloss2, ...], ...], ...]
   if (Array.isArray(data?.[1]) && data[1].length > 0) {
-    const firstPosBlock = data[1][0];
-    if (firstPosBlock?.[0]) {
-      pos = firstPosBlock[0]; // e.g., "noun", "verb", "adjective"
-    }
-    if (Array.isArray(firstPosBlock?.[1])) {
-      dictMeanings = firstPosBlock[1].slice(0, 3);
+    const posBlocks = data[1];
+    pos = posBlocks[0]?.[0] || "";
+    for (const block of posBlocks.slice(0, 2)) {
+      if (Array.isArray(block?.[1])) {
+        for (const g of block[1].slice(0, 3)) {
+          if (g && !dictMeanings.includes(g)) dictMeanings.push(g);
+        }
+      }
     }
   }
 
+  // data[5] is alternative translations (`dt=at`) when `dt=bd` is empty
+  let altMeanings = [];
+  if (dictMeanings.length === 0 && Array.isArray(data?.[5]?.[0]?.[2])) {
+    for (const alt of data[5][0][2].slice(0, 3)) {
+      const candidate = alt?.[0]?.trim();
+      if (
+        candidate &&
+        candidate.toLowerCase() !== queryWord.toLowerCase() &&
+        !altMeanings.includes(candidate)
+      ) {
+        altMeanings.push(candidate);
+      }
+    }
+  }
+
+  const bestGlossList = dictMeanings.length > 0 ? dictMeanings : altMeanings;
   const finalEn =
-    dictMeanings.length > 0
-      ? dictMeanings.join(" / ")
-      : primaryTranslation.trim() || word;
+    bestGlossList.length > 0
+      ? bestGlossList.slice(0, 4).join(" / ")
+      : primaryTranslation;
+
+  const isSameAsInput =
+    !finalEn || finalEn.toLowerCase() === queryWord.toLowerCase();
 
   return {
     en: finalEn,
     pos: pos || "word",
     romaji: transliteration.trim(),
+    isSameAsInput,
+    hasDictEntry: dictMeanings.length > 0
+  };
+}
+
+/**
+ * Queries English Wiktionary REST API for literary/inflected words and IPA.
+ */
+async function queryWiktionaryDefinition(queryWord, lang) {
+  try {
+    const url = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(
+      queryWord
+    )}`;
+    const resp = await fetch(url, {
+      headers: { Accept: "application/json" }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+
+    const langNames = {
+      fr: "French",
+      ja: "Japanese",
+      es: "Spanish",
+      de: "German",
+      it: "Italian"
+    };
+    const targetLangName = langNames[lang] || "";
+
+    // Find matching language section or fallback to any non-English section
+    let entries = data[lang];
+    if (!entries) {
+      for (const [, list] of Object.entries(data)) {
+        if (
+          Array.isArray(list) &&
+          list.some((item) => item.language === targetLangName)
+        ) {
+          entries = list.filter((item) => item.language === targetLangName);
+          break;
+        }
+      }
+    }
+    if (!Array.isArray(entries) || entries.length === 0) return null;
+
+    const defs = [];
+    let pos = "";
+    for (const entry of entries) {
+      if (!pos && entry.partOfSpeech) pos = entry.partOfSpeech;
+      if (Array.isArray(entry.definitions)) {
+        for (const d of entry.definitions) {
+          if (d?.definition) {
+            // Strip HTML tags from Wiktionary definition
+            const cleanDef = d.definition
+              .replace(/<[^>]+>/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
+            if (cleanDef && defs.length < 3) {
+              defs.push(cleanDef);
+            }
+          }
+        }
+      }
+    }
+
+    if (defs.length === 0) return null;
+    return {
+      en: defs.join(" • "),
+      pos: pos || "word"
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Multi-tier Live Dictionary & Translation Lookup for any word or phrase.
+ */
+async function lookupLiveWordDictionary(word, lang = "fr", contextSentence = "") {
+  if (!word || !word.trim()) {
+    return { en: "", pos: "word" };
+  }
+
+  const candidates = extractCleanLookupCandidates(word, lang);
+  let bestResult = null;
+
+  // Tier 1: Try Google GTX on each candidate (raw form, lowercase form, elision-stripped stem)
+  for (const cand of candidates) {
+    try {
+      const gtx = await queryGoogleGtxWord(cand, lang);
+      if (gtx && !gtx.isSameAsInput) {
+        bestResult = gtx;
+        if (gtx.hasDictEntry) break;
+      }
+    } catch (e) {}
+  }
+
+  // Tier 2: Try English Wiktionary if Google GTX didn't have a dictionary entry or returned input unchanged
+  if (!bestResult || !bestResult.hasDictEntry) {
+    for (const cand of candidates) {
+      const wik = await queryWiktionaryDefinition(cand, lang);
+      if (wik && wik.en) {
+        if (!bestResult || bestResult.isSameAsInput) {
+          bestResult = {
+            en: wik.en,
+            pos: wik.pos,
+            romaji: bestResult?.romaji || ""
+          };
+        } else {
+          // Combine GTX primary translation with Wiktionary grammatical note
+          bestResult.en = `${bestResult.en} (${wik.en})`;
+          if (!bestResult.pos || bestResult.pos === "word") {
+            bestResult.pos = wik.pos;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Tier 3: Try auto-detect source language if the user clicked an English or foreign loanword on the page
+  if (!bestResult || bestResult.isSameAsInput) {
+    try {
+      const autoGtx = await queryGoogleGtxWord(candidates[candidates.length - 1], "auto");
+      if (autoGtx && !autoGtx.isSameAsInput) {
+        bestResult = autoGtx;
+      }
+    } catch (e) {}
+  }
+
+  const cleanWord = candidates[candidates.length - 1] || word.trim();
+  const finalEn =
+    bestResult && bestResult.en && bestResult.en.toLowerCase() !== word.trim().toLowerCase()
+      ? bestResult.en
+      : bestResult?.en || cleanWord;
+
+  return {
+    en: finalEn,
+    pos: bestResult?.pos || "word",
+    romaji: bestResult?.romaji || "",
     kana: "",
-    ipa: transliteration ? `/${transliteration.trim()}/` : `/${word.trim().toLowerCase()}/`
+    ipa: bestResult?.romaji
+      ? `/${bestResult.romaji}/`
+      : `/${cleanWord.toLowerCase()}/`
   };
 }

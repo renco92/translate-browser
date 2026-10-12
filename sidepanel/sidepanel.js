@@ -8,13 +8,14 @@
   "use strict";
 
   const panelState = {
-    activeTab: "inspector", // 'inspector' | 'flashcards' | 'vault'
+    activeTab: "inspector", // 'inspector' | 'flashcards' | 'sites' | 'vault'
     currentWord: null,
     deck: [],
     cardIndex: 0,
     isFlipped: false,
     cardFilter: "all",
     kanaTab: "hiragana",
+    activeTabStatus: null,
     toastTimer: null
   };
 
@@ -22,15 +23,73 @@
     await window.quizzlerStorage.init();
     initDefaultWord();
     bindPanelEvents();
+    await refreshActiveTabStatus();
     renderAll();
 
     window.quizzlerStorage.subscribe((data) => {
       if (data.selectedWord) {
         panelState.currentWord = data.selectedWord;
       }
+      refreshActiveTabStatus();
       renderAll();
     });
+
+    if (chrome.tabs?.onActivated) {
+      chrome.tabs.onActivated.addListener(() => {
+        refreshActiveTabStatus();
+      });
+    }
+    if (chrome.tabs?.onUpdated) {
+      chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+        if (changeInfo.status === "complete" || changeInfo.url) {
+          refreshActiveTabStatus();
+        }
+      });
+    }
   });
+
+  async function refreshActiveTabStatus() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id || !tab.url || tab.url.startsWith("chrome")) {
+        panelState.activeTabStatus = {
+          url: tab?.url || "",
+          title: tab?.title || "",
+          overlayEnabled: false,
+          isBookmarked: false,
+          isNativeTargetLang: false
+        };
+        renderHeaderAndControls();
+        return;
+      }
+      const resp = await chrome.tabs.sendMessage(tab.id, { type: "GET_PAGE_STATUS" });
+      if (resp?.ok) {
+        panelState.activeTabStatus = resp;
+      } else {
+        panelState.activeTabStatus = {
+          url: tab.url,
+          title: tab.title,
+          overlayEnabled: window.quizzlerStorage.isOverlayEnabledForPage(tab.url),
+          isBookmarked: window.quizzlerStorage.isUrlBookmarked(tab.url),
+          isNativeTargetLang: false
+        };
+      }
+    } catch (e) {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        panelState.activeTabStatus = {
+          url: tab?.url || "",
+          title: tab?.title || "",
+          overlayEnabled: tab?.url
+            ? window.quizzlerStorage.isOverlayEnabledForPage(tab.url)
+            : false,
+          isBookmarked: tab?.url ? window.quizzlerStorage.isUrlBookmarked(tab.url) : false,
+          isNativeTargetLang: false
+        };
+      } catch (_) {}
+    }
+    renderHeaderAndControls();
+  }
 
   function initDefaultWord() {
     if (window.quizzlerStorage.data.selectedWord) {
@@ -55,6 +114,7 @@
     if (panelState.activeTab === "flashcards") {
       renderFlashcard();
     }
+    renderSitesTab();
     renderVaultTab();
   }
 
@@ -75,6 +135,13 @@
     const furiBtn = document.getElementById("sp-btn-furigana");
     const romajiBtn = document.getElementById("sp-btn-romaji");
 
+    const immerseLabel = document.getElementById("sp-immerse-label");
+    const detectBadge = document.getElementById("sp-page-detect-badge");
+    const overlayBtn = document.getElementById("sp-btn-toggle-overlay");
+    const overlayLabel = document.getElementById("sp-overlay-label");
+    const bookmarkBtn = document.getElementById("sp-btn-bookmark-page");
+    const bookmarkLabel = document.getElementById("sp-bookmark-label");
+
     if (flagEl) flagEl.textContent = cfg.flag;
     if (pillEl) pillEl.textContent = cfg.badge;
     if (selectEl && selectEl.value !== targetLang) selectEl.value = targetLang;
@@ -84,9 +151,55 @@
     }
     if (tabVaultCount) tabVaultCount.textContent = String(stats.total);
     if (immLabel) {
-      immLabel.textContent = immersionMode
-        ? "Immersion: Hide Ref"
-        : "Assisted: Show Ref";
+      immLabel.textContent = immersionMode ? "Hide Ref" : "Show Ref";
+    }
+
+    const st = panelState.activeTabStatus;
+    if (immerseLabel) {
+      if (st?.isPageTransformed) {
+        immerseLabel.textContent =
+          st.mode === "native"
+            ? `Immersed (${targetLang.toUpperCase()} Native)`
+            : `Immersed (→ ${targetLang.toUpperCase()})`;
+      } else if (st?.isNativeTargetLang) {
+        immerseLabel.textContent = `Immerse (${cfg.flag} Native Page)`;
+      } else {
+        immerseLabel.textContent = `Translate & Immerse (→ ${cfg.flag})`;
+      }
+    }
+
+    if (detectBadge) {
+      if (st?.detectedPageLang) {
+        detectBadge.textContent = st.isNativeTargetLang
+          ? `Detected: ${cfg.flag} Native ${cfg.name}`
+          : `Page: ${st.detectedPageLang.toUpperCase()} → ${targetLang.toUpperCase()}`;
+      } else {
+        detectBadge.textContent = "Active Tab Controls";
+      }
+    }
+
+    const overlayOn = Boolean(
+      st?.url ? window.quizzlerStorage.isOverlayEnabledForPage(st.url) : st?.overlayEnabled
+    );
+    if (overlayLabel) {
+      overlayLabel.textContent = `Overlay Bar: ${overlayOn ? "On" : "Off"}`;
+    }
+    if (overlayBtn) {
+      overlayBtn.className = overlayOn
+        ? "pro-btn px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 text-emerald-300 border-emerald-500/40 bg-emerald-950/30"
+        : "pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-zinc-300";
+    }
+
+    const bookmarked = Boolean(
+      st?.url ? window.quizzlerStorage.isUrlBookmarked(st.url) : st?.isBookmarked
+    );
+    if (bookmarkLabel) {
+      bookmarkLabel.textContent = bookmarked ? "Saved" : "Save";
+    }
+    if (bookmarkBtn) {
+      bookmarkBtn.className = bookmarked
+        ? "pro-btn py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 shrink-0 text-yellow-300 border-yellow-400/50 bg-yellow-400/15"
+        : "pro-btn py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 shrink-0";
     }
 
     if (jaControls) {
@@ -593,6 +706,176 @@
   }
 
   // ==========================================
+  // TAB 3: BOOKMARKS & RECOMMENDED NATIVE SITES
+  // ==========================================
+
+  function renderSitesTab() {
+    const lang = window.quizzlerStorage.data.targetLang;
+    const cfg = window.quizzlerStorage.getLangConfig(lang);
+
+    const recTitle = document.getElementById("sp-rec-sites-title");
+    const recBadge = document.getElementById("sp-rec-sites-lang-badge");
+    if (recTitle) recTitle.textContent = `Recommended Native ${cfg.name} Sites`;
+    if (recBadge) recBadge.textContent = `${cfg.flag} ${lang.toUpperCase()}`;
+
+    // 1. Render Bookmarks List
+    const bookmarksEl = document.getElementById("sp-bookmarks-list");
+    if (bookmarksEl) {
+      const bookmarks = window.quizzlerStorage.getBookmarks("all");
+      if (bookmarks.length === 0) {
+        bookmarksEl.innerHTML = `<div class="p-3 text-center text-xs text-zinc-500">No bookmarked pages yet. Click "+ Save Active Tab" or save a recommended site below!</div>`;
+      } else {
+        bookmarksEl.innerHTML = bookmarks
+          .map((bm) => {
+            const bmCfg = window.quizzlerStorage.getLangConfig(bm.lang || "fr");
+            return `
+            <div class="p-2.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-yellow-400/50 transition flex items-center justify-between gap-2">
+              <div class="min-w-0 flex-1 cursor-pointer sp-open-url" data-url="${encodeURIComponent(
+                bm.url
+              )}">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs">${bmCfg.flag}</span>
+                  <span class="font-bold text-xs text-white truncate">${escapeHtml(
+                    bm.title || bm.url
+                  )}</span>
+                </div>
+                <div class="text-[10px] text-zinc-400 truncate font-mono">${escapeHtml(
+                  bm.note || bm.url
+                )}</div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" class="sp-open-url pro-btn px-2 py-1 rounded-lg text-[10px] font-bold text-yellow-300 border-yellow-400/30" data-url="${encodeURIComponent(
+                  bm.url
+                )}" title="Open in Tab">
+                  Open ↗
+                </button>
+                <button type="button" class="sp-remove-bookmark pro-btn w-6 h-6 rounded-lg text-[11px] text-zinc-400 hover:text-red-400" data-url="${encodeURIComponent(
+                  bm.url
+                )}" title="Remove Bookmark">
+                  ✕
+                </button>
+              </div>
+            </div>
+          `;
+          })
+          .join("");
+
+        bookmarksEl.querySelectorAll(".sp-open-url").forEach((el) => {
+          el.addEventListener("click", () => {
+            const url = decodeURIComponent(el.getAttribute("data-url") || "");
+            if (url) chrome.tabs.create({ url });
+          });
+        });
+
+        bookmarksEl.querySelectorAll(".sp-remove-bookmark").forEach((btn) => {
+          btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const url = decodeURIComponent(btn.getAttribute("data-url") || "");
+            await window.quizzlerStorage.removeBookmark(url);
+            renderAll();
+            showToast("Removed bookmark.");
+          });
+        });
+      }
+    }
+
+    // 2. Render Recommended Native Sites List for Active Language
+    const recListEl = document.getElementById("sp-recommended-sites-list");
+    if (recListEl) {
+      const recSites = window.quizzlerStorage.getRecommendedSites(lang);
+      recListEl.innerHTML = recSites
+        .map((site) => {
+          const isSaved = window.quizzlerStorage.isUrlBookmarked(site.url);
+          return `
+          <div class="p-3 rounded-2xl bg-zinc-900/85 border border-zinc-800 hover:border-yellow-400/40 transition space-y-1.5">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-bold text-xs text-white leading-snug">${escapeHtml(
+                  site.title
+                )}</div>
+                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-yellow-400/20 text-yellow-300 border border-yellow-400/30">
+                    ${escapeHtml(site.level || "All Levels")}
+                  </span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700">
+                    ${escapeHtml(site.tag || "Native")}
+                  </span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" class="sp-save-rec pro-btn px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                  isSaved ? "text-yellow-300 border-yellow-400/50" : "text-zinc-300"
+                }" data-url="${encodeURIComponent(site.url)}" data-title="${encodeURIComponent(
+            site.title
+          )}" data-note="${encodeURIComponent(site.desc || "")}">
+                  ${isSaved ? "🔖 Saved" : "🔖"}
+                </button>
+                <button type="button" class="sp-open-rec pro-btn px-2.5 py-1 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-[10px]" data-url="${encodeURIComponent(
+                  site.url
+                )}">
+                  Open ↗
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-zinc-400 leading-relaxed">${escapeHtml(
+              site.desc || ""
+            )}</p>
+          </div>
+        `;
+        })
+        .join("");
+
+      recListEl.querySelectorAll(".sp-open-rec").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const url = decodeURIComponent(btn.getAttribute("data-url") || "");
+          if (url) chrome.tabs.create({ url });
+        });
+      });
+
+      recListEl.querySelectorAll(".sp-save-rec").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const url = decodeURIComponent(btn.getAttribute("data-url") || "");
+          const title = decodeURIComponent(btn.getAttribute("data-title") || "");
+          const note = decodeURIComponent(btn.getAttribute("data-note") || "");
+          const res = await window.quizzlerStorage.toggleBookmark({
+            url,
+            title,
+            lang,
+            note
+          });
+          renderAll();
+          showToast(res.added ? "🔖 Added to your learning bookmarks!" : "Removed bookmark.");
+        });
+      });
+    }
+  }
+
+  async function bookmarkCurrentActiveTab() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.url || tab.url.startsWith("chrome")) {
+        showToast("Switch to a web page tab to bookmark it.");
+        return;
+      }
+      const res = await window.quizzlerStorage.toggleBookmark({
+        url: tab.url,
+        title: tab.title || tab.url,
+        lang: window.quizzlerStorage.data.targetLang
+      });
+      await refreshActiveTabStatus();
+      renderAll();
+      if (res.added) {
+        window.quizzlerSound.playCorrectChime();
+        showToast("🔖 Bookmarked active page for language learning!");
+      } else {
+        showToast("Removed active page from bookmarks.");
+      }
+    } catch (e) {
+      showToast("Could not bookmark active tab.");
+    }
+  }
+
+  // ==========================================
   // KANA 50-SOUNDS CHART MODAL
   // ==========================================
 
@@ -640,11 +923,14 @@
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) {
         showToast("No active web tab found.");
-        return;
+        return null;
       }
-      await chrome.tabs.sendMessage(tab.id, message);
+      const res = await chrome.tabs.sendMessage(tab.id, message);
+      await refreshActiveTabStatus();
+      return res;
     } catch (e) {
       showToast("Please refresh the webpage once to activate Quizzler on this tab.");
+      return null;
     }
   }
 
@@ -653,8 +939,8 @@
     document.querySelectorAll(".sp-nav-tab").forEach((btn) => {
       const isAct = btn.getAttribute("data-tab") === tabName;
       btn.className = isAct
-        ? "sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80"
-        : "sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-transparent text-zinc-400 hover:text-white";
+        ? "sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80"
+        : "sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white";
     });
 
     document
@@ -664,11 +950,16 @@
       .getElementById("sp-view-flashcards")
       ?.classList.toggle("hidden", tabName !== "flashcards");
     document
+      .getElementById("sp-view-sites")
+      ?.classList.toggle("hidden", tabName !== "sites");
+    document
       .getElementById("sp-view-vault")
       ?.classList.toggle("hidden", tabName !== "vault");
 
     if (tabName === "flashcards") {
       loadFlashcardDeck(panelState.cardFilter);
+    } else if (tabName === "sites") {
+      renderSitesTab();
     } else if (tabName === "vault") {
       renderVaultTab();
     }
@@ -679,6 +970,7 @@
       await window.quizzlerStorage.setTargetLang(e.target.value);
       initDefaultWord();
       loadFlashcardDeck("all");
+      await refreshActiveTabStatus();
       renderAll();
     });
 
@@ -693,13 +985,64 @@
       chrome.runtime.sendMessage({ type: "OPEN_STUDIO_TAB" });
     });
 
-    document.getElementById("sp-btn-translate-page")?.addEventListener("click", () => {
-      sendToActiveTab({ type: "TRIGGER_TRANSLATE_PAGE" });
+    // Unified Smart Immerse Button (auto-detects native vs translate)
+    document.getElementById("sp-btn-immerse-page")?.addEventListener("click", () => {
+      sendToActiveTab({ type: "TRIGGER_SMART_IMMERSE_PAGE" });
     });
 
-    document.getElementById("sp-btn-tokenize-page")?.addEventListener("click", () => {
-      sendToActiveTab({ type: "TRIGGER_TOKENIZE_NATIVE_PAGE" });
-    });
+    // Bookmark Active Tab Button
+    document
+      .getElementById("sp-btn-bookmark-page")
+      ?.addEventListener("click", () => bookmarkCurrentActiveTab());
+
+    document
+      .getElementById("sp-btn-bookmark-current-in-tab")
+      ?.addEventListener("click", () => bookmarkCurrentActiveTab());
+
+    // Custom URL Bookmark Form
+    document
+      .getElementById("sp-add-bookmark-form")
+      ?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = document.getElementById("sp-bookmark-url-input");
+        const rawUrl = (input?.value || "").trim();
+        if (!rawUrl) return;
+        let title = rawUrl;
+        try {
+          const parsed = new URL(rawUrl);
+          title = `${parsed.hostname}${parsed.pathname !== "/" ? parsed.pathname : ""}`;
+        } catch (_) {}
+        await window.quizzlerStorage.toggleBookmark({
+          url: rawUrl,
+          title,
+          lang: window.quizzlerStorage.data.targetLang
+        });
+        if (input) input.value = "";
+        renderAll();
+        showToast("🔖 Added URL to learning bookmarks!");
+      });
+
+    // Per-Site Floating Overlay Bar Toggle (Defaults to Off)
+    document
+      .getElementById("sp-btn-toggle-overlay")
+      ?.addEventListener("click", async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.url || tab.url.startsWith("chrome")) {
+          showToast("Switch to a web page tab to toggle the overlay bar.");
+          return;
+        }
+        const res = await sendToActiveTab({ type: "TOGGLE_FLOATING_BAR" });
+        if (!res) {
+          // Even if content script wasn't loaded yet, toggle in storage
+          const next = await window.quizzlerStorage.toggleOverlayForPage(tab.url);
+          await refreshActiveTabStatus();
+          showToast(
+            next
+              ? "🧭 Overlay bar enabled for this page."
+              : "Overlay bar hidden for this page."
+          );
+        }
+      });
 
     document.getElementById("sp-btn-restore-page")?.addEventListener("click", () => {
       sendToActiveTab({ type: "TRIGGER_RESTORE_PAGE" });

@@ -1,8 +1,8 @@
 /**
- * Quizzler Extension Unified State, Dictionary & Storage Manager
+ * Quizzler Extension Unified State, Dictionary, Bookmarks & Storage Manager
  * Synchronizes Review Vault flashcards, custom definitions, active language,
- * Japanese Furigana/Romaji settings, selected word inspector state, and
- * per-webpage self-assessment translations across Content Scripts, Side Panel, and Studio.
+ * Japanese Furigana/Romaji settings, selected word inspector state,
+ * bookmarked learning pages, and curated native sites across all extension contexts.
  */
 
 const QUIZZLER_LANGUAGES = {
@@ -47,6 +47,165 @@ const QUIZZLER_LANGUAGES = {
     badge: "ITALIAN"
   }
 };
+
+/**
+ * Curated Native Language Learning Sites & Classic Literature per Language
+ */
+const RECOMMENDED_NATIVE_SITES = {
+  fr: [
+    {
+      title: "Le Petit Prince — Texte Intégral (Saint-Exupéry)",
+      url: "https://gutenberg.net.au/ebooks03/0300771h.html",
+      level: "A2–B1",
+      category: "Classic Literature",
+      desc: "Complete illustrated French text of Le Petit Prince across all 27 chapters."
+    },
+    {
+      title: "RFI — Le Journal en français facile",
+      url: "https://francaisfacile.rfi.fr/fr/",
+      level: "A2–B2",
+      category: "Easy News & Audio",
+      desc: "Daily international news written and spoken in clear, accessible French with transcripts."
+    },
+    {
+      title: "1jour1actu — L'actualité à hauteur d'enfants",
+      url: "https://www.1jour1actu.com/",
+      level: "A2–B1",
+      category: "Explainers & Culture",
+      desc: "Short, engaging French articles explaining world events, science, and everyday questions."
+    },
+    {
+      title: "Wikisource — Les Fables de La Fontaine",
+      url: "https://fr.wikisource.org/wiki/Fables_de_La_Fontaine",
+      level: "B1–C1",
+      category: "Classic Literature",
+      desc: "Authentic French fables (Le Corbeau et le Renard, La Cigale et la Fourmi)."
+    },
+    {
+      title: "TV5MONDE — Apprendre le français",
+      url: "https://apprendre.tv5monde.com/fr",
+      level: "A1–B2",
+      category: "Interactive Articles",
+      desc: "Francophone culture, news, and everyday life readings graded by CEFR level."
+    },
+    {
+      title: "Le Monde — Actualités en direct",
+      url: "https://www.lemonde.fr/",
+      level: "B2–C1",
+      category: "Native Newspaper",
+      desc: "France's flagship daily newspaper for advanced native reading immersion."
+    }
+  ],
+  ja: [
+    {
+      title: "NHK News Web Easy (やさしい日本語ニュース)",
+      url: "https://www3.nhk.or.jp/news/easy/",
+      level: "N4–N3",
+      category: "Easy Japanese News",
+      desc: "Daily NHK news written in simple Japanese for learners, with Furigana and audio."
+    },
+    {
+      title: "青空文庫 (Aozora Bunko) — ごんぎつね (新美南吉)",
+      url: "https://www.aozora.gr.jp/cards/000121/files/628_14895.html",
+      level: "N3",
+      category: "Classic Folktale",
+      desc: "Niimi Nankichi's beloved elementary masterpiece 'Gon, the Little Fox' in original Japanese."
+    },
+    {
+      title: "青空文庫 (Aozora Bunko) — 注文の多い料理店 (宮沢賢治)",
+      url: "https://www.aozora.gr.jp/cards/000081/files/43754_17659.html",
+      level: "N3–N2",
+      category: "Classic Literature",
+      desc: "Kenji Miyazawa's famous short story 'The Restaurant of Many Orders'."
+    },
+    {
+      title: "MATCHA — やさしい日本語 (Easy Japanese Travel & Culture)",
+      url: "https://matcha-jp.com/easy",
+      level: "N4",
+      category: "Culture & Travel",
+      desc: "Japanese cultural guides, food, and seasonal traditions written in beginner-friendly Japanese."
+    },
+    {
+      title: "福娘童話集 (Hukumusume Fairy Tales) — 日本の昔話",
+      url: "http://hukumusume.com/douwa/jap/",
+      level: "N5–N3",
+      category: "Traditional Folktales",
+      desc: "Hundreds of classic Japanese folktales (Momotaro, Kaguya-hime, Urashima Taro)."
+    }
+  ],
+  es: [
+    {
+      title: " Practica Español — Noticias EFE",
+      url: "https://www.practicaespanol.com/",
+      level: "A2–B2",
+      category: "Graded News",
+      desc: "News and cultural articles from Agencia EFE graded by A1, A2, B1, B2, and C1."
+    },
+    {
+      title: "Ciudad Seva — Cuentos Clásicos en Español",
+      url: "https://ciudadseva.com/biblioteca/indice-autor-cuentos/",
+      level: "B1–C1",
+      category: "Short Stories",
+      desc: "Digital library of classic Latin American and Spanish short stories."
+    },
+    {
+      title: "El País — Edición Global",
+      url: "https://elpais.com/",
+      level: "B2–C1",
+      category: "Native Newspaper",
+      desc: "Leading Spanish-language daily newspaper covering global news and culture."
+    }
+  ],
+  de: [
+    {
+      title: "Nachrichtenleicht — Nachrichten in einfacher Sprache",
+      url: "https://www.nachrichtenleicht.de/",
+      level: "A2–B1",
+      category: "Easy German News",
+      desc: "Weekly German news from Deutschlandfunk written in simple, clear sentences."
+    },
+    {
+      title: "Deutsche Welle (DW) — Deutsch lernen",
+      url: "https://learngerman.dw.com/de/overview",
+      level: "A1–C1",
+      category: "Articles & Stories",
+      desc: "Graded German news, everyday dialogues, and cultural features."
+    },
+    {
+      title: "Projekt Gutenberg-DE — Märchen der Brüder Grimm",
+      url: "https://www.projekt-gutenberg.org/grimm/maerchen/maerchen.html",
+      level: "B1–B2",
+      category: "Classic Fairy Tales",
+      desc: "Original German fairy tales by the Brothers Grimm."
+    }
+  ],
+  it: [
+    {
+      title: "ANSA.it — Notizie in Italiano",
+      url: "https://www.ansa.it/",
+      level: "B1–C1",
+      category: "Concise News",
+      desc: "Short, factual Italian wire dispatches ideal for daily reading practice."
+    },
+    {
+      title: "Wikisource Italiano — Le avventure di Pinocchio",
+      url: "https://it.wikisource.org/wiki/Le_avventure_di_Pinocchio",
+      level: "B1–B2",
+      category: "Classic Literature",
+      desc: "Carlo Collodi's classic Italian tale of Pinocchio chapter by chapter."
+    }
+  ]
+};
+
+const STARTER_BOOKMARKS = [
+  {
+    url: "https://gutenberg.net.au/ebooks03/0300771h.html",
+    title: "Le Petit Prince — Antoine de Saint-Exupéry (Complete French Text)",
+    lang: "fr",
+    category: "Classic Literature",
+    addedAt: Date.now() - 10000
+  }
+];
 
 const STARTER_FRENCH_CARDS = {
   prince: {
@@ -221,6 +380,25 @@ const STARTER_JAPANESE_CARDS = {
   }
 };
 
+function isPlaceholderDefinition(enText, cleanWord = "") {
+  if (!enText || typeof enText !== "string") return true;
+  const t = enText.trim();
+  if (!t) return true;
+  if (
+    t.startsWith("French vocabulary:") ||
+    t.startsWith("French word:") ||
+    t.startsWith("Looking up") ||
+    t.startsWith("Translating") ||
+    t.startsWith("vocabulary word") ||
+    t.startsWith("Japanese expression:") ||
+    t.startsWith("Japanese phrase") ||
+    t.startsWith("Compound word composed of:")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 class QuizzlerStorageManager {
   constructor() {
     this.storageKey = "quizzler_ext_state_v1";
@@ -228,13 +406,15 @@ class QuizzlerStorageManager {
     this.readyPromise = null;
 
     this.data = {
-      targetLang: "fr", // 'fr', 'ja', 'es', 'de', 'it'
-      immersionMode: true, // true = reference translations hidden until clicked
-      furiganaMode: "always", // 'always' | 'hover' | 'off'
+      targetLang: "fr",
+      immersionMode: true,
+      furiganaMode: "always",
       showRomaji: false,
-      showFloatingBar: true,
+      showFloatingBar: false, // Defaults to OFF; user enables on demand per site or from Side Panel
+      enabledOverlayUrls: {}, // { [originOrPageKey]: boolean }
       soundEnabled: true,
       selectedWord: null,
+      bookmarks: [...STARTER_BOOKMARKS],
       vaults: {
         fr: { ...STARTER_FRENCH_CARDS },
         ja: { ...STARTER_JAPANESE_CARDS },
@@ -256,8 +436,8 @@ class QuizzlerStorageManager {
         de: {},
         it: {}
       },
-      pageTranslations: {}, // { [urlKey]: { [blockIdx]: { text: string, score: number|null, revealed: boolean } } }
-      customArticles: [], // Saved custom texts in Studio
+      pageTranslations: {},
+      customArticles: [],
       stats: {
         wordsInspected: 0,
         cardsReviewedToday: 0,
@@ -275,8 +455,7 @@ class QuizzlerStorageManager {
         if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
           const res = await chrome.storage.local.get(this.storageKey);
           if (res && res[this.storageKey]) {
-            const saved = res[this.storageKey];
-            this.mergeState(saved);
+            this.mergeState(res[this.storageKey]);
           } else {
             await this.save();
           }
@@ -303,20 +482,45 @@ class QuizzlerStorageManager {
     if (saved.immersionMode !== undefined) this.data.immersionMode = saved.immersionMode;
     if (saved.furiganaMode) this.data.furiganaMode = saved.furiganaMode;
     if (saved.showRomaji !== undefined) this.data.showRomaji = saved.showRomaji;
-    if (saved.showFloatingBar !== undefined) this.data.showFloatingBar = saved.showFloatingBar;
+    if (saved.enabledOverlayUrls && typeof saved.enabledOverlayUrls === "object") {
+      this.data.enabledOverlayUrls = saved.enabledOverlayUrls;
+    }
     if (saved.soundEnabled !== undefined) {
       this.data.soundEnabled = saved.soundEnabled;
       if (window.quizzlerSound) window.quizzlerSound.soundEnabled = saved.soundEnabled;
     }
     if (saved.selectedWord !== undefined) this.data.selectedWord = saved.selectedWord;
+    if (Array.isArray(saved.bookmarks) && saved.bookmarks.length > 0) {
+      this.data.bookmarks = saved.bookmarks;
+      // Ensure starter Gutenberg Le Petit Prince bookmark exists if never added
+      if (
+        !this.data.bookmarks.some((b) =>
+          b.url.includes("gutenberg.net.au/ebooks03/0300771h.html")
+        )
+      ) {
+        this.data.bookmarks.unshift(STARTER_BOOKMARKS[0]);
+      }
+    }
     if (saved.vaults) {
       this.data.vaults = { ...this.data.vaults, ...saved.vaults };
     }
     if (saved.customDefinitions) {
-      this.data.customDefinitions = { ...this.data.customDefinitions, ...saved.customDefinitions };
+      this.data.customDefinitions = {
+        ...this.data.customDefinitions,
+        ...saved.customDefinitions
+      };
     }
     if (saved.liveWordCache) {
       this.data.liveWordCache = { ...this.data.liveWordCache, ...saved.liveWordCache };
+      // Purge any stale "French vocabulary: ..." placeholder entries from cache
+      for (const lang of Object.keys(this.data.liveWordCache)) {
+        const map = this.data.liveWordCache[lang] || {};
+        for (const [k, v] of Object.entries(map)) {
+          if (isPlaceholderDefinition(v?.en, k)) {
+            delete map[k];
+          }
+        }
+      }
     }
     if (saved.pageTranslations) {
       this.data.pageTranslations = saved.pageTranslations;
@@ -384,6 +588,89 @@ class QuizzlerStorageManager {
     return this.data.showRomaji;
   }
 
+  // ==========================================
+  // PER-SITE OVERLAY BAR VISIBILITY (DEFAULT OFF)
+  // ==========================================
+
+  isOverlayEnabledForPage(url = window.location.href) {
+    const key = this.getPageKey(url);
+    return Boolean(this.data.enabledOverlayUrls?.[key]);
+  }
+
+  async setOverlayEnabledForPage(url, enabled) {
+    const key = this.getPageKey(url);
+    if (!this.data.enabledOverlayUrls) {
+      this.data.enabledOverlayUrls = {};
+    }
+    if (enabled) {
+      this.data.enabledOverlayUrls[key] = true;
+    } else {
+      delete this.data.enabledOverlayUrls[key];
+    }
+    await this.save();
+    return Boolean(enabled);
+  }
+
+  async toggleOverlayForPage(url = window.location.href) {
+    const current = this.isOverlayEnabledForPage(url);
+    return await this.setOverlayEnabledForPage(url, !current);
+  }
+
+  // ==========================================
+  // BOOKMARKS & RECOMMENDED SITES
+  // ==========================================
+
+  getRecommendedSites(lang = this.data.targetLang) {
+    return RECOMMENDED_NATIVE_SITES[lang] || RECOMMENDED_NATIVE_SITES.fr;
+  }
+
+  getBookmarks(lang = null) {
+    const list = this.data.bookmarks || [];
+    if (!lang || lang === "all") return list;
+    return list.filter((b) => !b.lang || b.lang === lang);
+  }
+
+  isUrlBookmarked(url) {
+    if (!url) return false;
+    const norm = url.trim().replace(/\/$/, "");
+    return (this.data.bookmarks || []).some(
+      (b) => (b.url || "").trim().replace(/\/$/, "") === norm
+    );
+  }
+
+  async toggleBookmark({ url, title, lang = this.data.targetLang, category = "Saved Page" }) {
+    if (!url) return false;
+    const norm = url.trim().replace(/\/$/, "");
+    const existingIdx = (this.data.bookmarks || []).findIndex(
+      (b) => (b.url || "").trim().replace(/\/$/, "") === norm
+    );
+
+    if (existingIdx >= 0) {
+      this.data.bookmarks.splice(existingIdx, 1);
+      await this.save();
+      return false; // Removed
+    } else {
+      this.data.bookmarks.unshift({
+        url: url.trim(),
+        title: (title || url).trim(),
+        lang,
+        category,
+        addedAt: Date.now()
+      });
+      await this.save();
+      return true; // Added
+    }
+  }
+
+  async removeBookmark(url) {
+    if (!url) return;
+    const norm = url.trim().replace(/\/$/, "");
+    this.data.bookmarks = (this.data.bookmarks || []).filter(
+      (b) => (b.url || "").trim().replace(/\/$/, "") !== norm
+    );
+    await this.save();
+  }
+
   async setSelectedWord(wordMeta) {
     this.data.selectedWord = wordMeta;
     this.data.stats.wordsInspected = (this.data.stats.wordsInspected || 0) + 1;
@@ -396,7 +683,7 @@ class QuizzlerStorageManager {
 
   normalizeWordKey(rawWord, lang = this.data.targetLang) {
     if (!rawWord) return "";
-    const trimmed = String(rawWord).trim();
+    const trimmed = String(rawWord).trim().replace(/[\u2018\u2019\u02bc]/g, "'");
     if (lang === "ja") {
       return window.normalizeJapaneseWord
         ? window.normalizeJapaneseWord(trimmed)
@@ -429,20 +716,28 @@ class QuizzlerStorageManager {
       const frRes = window.lookupFrenchWord(rawWord);
       const isFallback =
         !frRes ||
-        frRes.en.startsWith("French word:") ||
-        frRes.en.startsWith("vocabulary word");
+        Boolean(frRes.isFallback) ||
+        isPlaceholderDefinition(frRes.en, cleanKey);
+
       const finalEn =
         customDef ||
-        (cachedLive && isFallback ? cachedLive.en : frRes.en);
+        (cachedLive && !isPlaceholderDefinition(cachedLive.en, cleanKey)
+          ? cachedLive.en
+          : frRes.en);
+
       return {
         ...frRes,
         lang: "fr",
         word: rawWord.trim(),
         cleanWord: frRes.cleanWord || cleanKey,
+        pos: cachedLive?.pos && isFallback ? cachedLive.pos : frRes.pos,
         originalEn: cachedLive?.en || frRes.en,
         en: finalEn,
         isCustom: Boolean(customDef),
-        needsLiveLookup: isFallback && !cachedLive && !customDef
+        needsLiveLookup:
+          isFallback &&
+          (!cachedLive || isPlaceholderDefinition(cachedLive.en, cleanKey)) &&
+          !customDef
       };
     }
 
@@ -450,11 +745,15 @@ class QuizzlerStorageManager {
       const jaRes = window.lookupJapaneseWord(rawWord);
       const isFallback =
         !jaRes ||
-        jaRes.en.startsWith("Japanese expression:") ||
-        jaRes.en.startsWith("Compound word composed of:");
+        Boolean(jaRes.isFallback) ||
+        isPlaceholderDefinition(jaRes.en, cleanKey);
+
       const finalEn =
         customDef ||
-        (cachedLive && isFallback ? cachedLive.en : jaRes.en);
+        (cachedLive && !isPlaceholderDefinition(cachedLive.en, cleanKey)
+          ? cachedLive.en
+          : jaRes.en);
+
       return {
         ...jaRes,
         lang: "ja",
@@ -465,11 +764,13 @@ class QuizzlerStorageManager {
         originalEn: cachedLive?.en || jaRes.en,
         en: finalEn,
         isCustom: Boolean(customDef),
-        needsLiveLookup: isFallback && !cachedLive && !customDef
+        needsLiveLookup:
+          isFallback &&
+          (!cachedLive || isPlaceholderDefinition(cachedLive.en, cleanKey)) &&
+          !customDef
       };
     }
 
-    // Other languages or fallback
     return {
       lang,
       word: rawWord.trim(),
@@ -477,16 +778,16 @@ class QuizzlerStorageManager {
       ipa: cachedLive?.ipa || `/${cleanKey}/`,
       pos: cachedLive?.pos || "word",
       gender: cachedLive?.gender || "",
-      originalEn: cachedLive?.en || `Translating "${rawWord.trim()}"...`,
-      en: customDef || cachedLive?.en || `Translating "${rawWord.trim()}"...`,
+      originalEn: cachedLive?.en || `Looking up "${rawWord.trim()}"...`,
+      en: customDef || cachedLive?.en || `Looking up "${rawWord.trim()}"...`,
       isCustom: Boolean(customDef),
       needsLiveLookup: !cachedLive && !customDef
     };
   }
 
   /**
-   * Async lookup that enriches unknown words on any webpage using the Service Worker's
-   * live translation & dictionary fallback endpoint.
+   * Async lookup that enriches any unknown word on any webpage using the Service Worker's
+   * multi-tier live dictionary (Google GTX + Wiktionary + Contextual fallback).
    */
   async lookupWordWithLiveFallback(
     rawWord,
@@ -511,9 +812,10 @@ class QuizzlerStorageManager {
         const resp = await chrome.runtime.sendMessage({
           type: "LOOKUP_LIVE_WORD",
           word: rawWord.trim(),
-          lang
+          lang,
+          contextSentence: contextTarget
         });
-        if (resp && resp.en) {
+        if (resp && resp.en && !isPlaceholderDefinition(resp.en, base.cleanWord)) {
           const cleanKey = this.normalizeWordKey(base.cleanWord || rawWord, lang);
           if (!this.data.liveWordCache[lang]) this.data.liveWordCache[lang] = {};
           this.data.liveWordCache[lang][cleanKey] = {
@@ -529,8 +831,17 @@ class QuizzlerStorageManager {
             base.en = resp.en;
             base.originalEn = resp.en;
           }
-          if (resp.pos && (!base.pos || base.pos === "word" || base.pos.includes("Expression"))) {
+          if (
+            resp.pos &&
+            (!base.pos ||
+              base.pos === "word" ||
+              base.pos === "mot" ||
+              base.pos.includes("Expression"))
+          ) {
             base.pos = resp.pos;
+          }
+          if (resp.romaji && !base.romaji) {
+            base.romaji = resp.romaji;
           }
           base.needsLiveLookup = false;
         }
@@ -561,7 +872,7 @@ class QuizzlerStorageManager {
       base = {
         word: rawPhrase.trim(),
         cleanWord: cleanKey,
-        en: customDef || `Translating "${rawPhrase.trim()}"...`,
+        en: customDef || `Looking up "${rawPhrase.trim()}"...`,
         pos: "Phrase / Expression",
         ipa: `/${cleanKey}/`,
         isPhrase: true
@@ -579,19 +890,18 @@ class QuizzlerStorageManager {
       base.isCustom = true;
     }
 
-    // Check if phrase needs live translation (e.g. constituent fallback with '•' or generic Japanese phrase)
     const needsLive =
       !customDef &&
       (base.en.includes(" • ") ||
-        base.en.startsWith("Japanese phrase") ||
-        base.en.startsWith("Translating"));
+        isPlaceholderDefinition(base.en, cleanKey));
 
     if (needsLive && typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
       try {
         const resp = await chrome.runtime.sendMessage({
           type: "LOOKUP_LIVE_WORD",
           word: rawPhrase.trim(),
-          lang
+          lang,
+          contextSentence: contextTarget
         });
         if (resp && resp.en) {
           base.en = resp.en;
@@ -613,14 +923,12 @@ class QuizzlerStorageManager {
 
     let result = text;
     if (window.JAPANESE_VOCAB_DB) {
-      // Sort Kanji dictionary entries longest first so compound words match before single Kanji
       if (!this._sortedJaKanjiEntries) {
         this._sortedJaKanjiEntries = Object.entries(window.JAPANESE_VOCAB_DB)
           .filter(([k, v]) => /[一-龯々]/.test(k) && v.kana && k !== v.kana)
           .sort((a, b) => b[0].length - a[0].length);
       }
 
-      // Replace compounds with placeholders first so nested Kanji aren't double-wrapped
       const placeholders = [];
       for (const [word, entry] of this._sortedJaKanjiEntries) {
         if (result.includes(word)) {
@@ -630,7 +938,6 @@ class QuizzlerStorageManager {
         }
       }
 
-      // Annotate any remaining standalone Kanji from JAPANESE_KANJI_DB
       if (window.JAPANESE_KANJI_DB) {
         result = result.replace(/[一-龯]/g, (ch) => {
           const kInfo = window.JAPANESE_KANJI_DB[ch];
@@ -646,7 +953,6 @@ class QuizzlerStorageManager {
         });
       }
 
-      // Restore compound placeholders
       result = result.replace(/\u0000RUBY_(\d+)\u0000/g, (_, i) => placeholders[Number(i)]);
     }
 
@@ -686,7 +992,7 @@ class QuizzlerStorageManager {
     if (vault[key]) {
       delete vault[key];
       await this.save();
-      return false; // Removed
+      return false;
     } else {
       const customDef = this.getCustomDefinition(key, lang);
       const finalEn = customDef || wordMeta.en || "vocabulary word";
@@ -722,7 +1028,7 @@ class QuizzlerStorageManager {
         lastReviewed: null
       };
       await this.save();
-      return true; // Added
+      return true;
     }
   }
 
@@ -893,4 +1199,5 @@ class QuizzlerStorageManager {
 }
 
 window.QUIZZLER_LANGUAGES = QUIZZLER_LANGUAGES;
+window.RECOMMENDED_NATIVE_SITES = RECOMMENDED_NATIVE_SITES;
 window.quizzlerStorage = new QuizzlerStorageManager();

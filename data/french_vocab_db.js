@@ -2746,7 +2746,7 @@ window.FRENCH_VOCAB_DB = {
  */
 window.normalizeFrenchWord = function(rawWord) {
   if (!rawWord) return "";
-  let clean = rawWord.trim().toLowerCase();
+  let clean = rawWord.trim().toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'");
 
   // Normalize ligatures
   clean = clean.replace(/œ/g, "oe").replace(/æ/g, "ae");
@@ -2762,8 +2762,8 @@ window.normalizeFrenchWord = function(rawWord) {
   // 2. Strip leading elisions for regular nouns/verbs: l'oiseau -> oiseau, d'eau -> eau, j'aime -> aime, m'appelle -> appelle, s'amuse -> amuse
   clean = clean.replace(/^(jusqu'|lorsqu'|puisqu'|l'|d'|qu'|s'|c'|m'|t'|n'|j')/i, '');
 
-  // 3. Strip trailing clitics if hyphenated (e.g. donne-moi -> donne)
-  clean = clean.replace(/-(moi|toi|lui|le|la|les|nous|vous|en|y|il|elle|on|ils|elles|je|tu)$/i, '');
+  // 3. Strip trailing clitics if hyphenated (e.g. donne-moi -> donne, dit-il -> dit, est-ce -> est)
+  clean = clean.replace(/-(t-il|t-elle|t-on|moi|toi|lui|le|la|les|nous|vous|en|y|il|elle|on|ils|elles|je|tu|ce|la|ci)$/i, '');
 
   // 4. Strip remaining apostrophes or hyphens if any
   clean = clean.replace(/['\-]/g, '');
@@ -2788,7 +2788,7 @@ window.stripAccents = function(str) {
  */
 window.lookupFrenchWord = function(rawWord) {
   if (!rawWord) return null;
-  const rawTrim = rawWord.trim();
+  const rawTrim = rawWord.trim().replace(/[\u2018\u2019\u02bc]/g, "'");
   const lower = rawTrim.toLowerCase().replace(/œ/g, "oe").replace(/æ/g, "ae");
   const strippedPunct = lower.replace(/[.,\/#!$%\^&\*;:{}=\_~`()?"«»]/g, '');
 
@@ -2826,7 +2826,7 @@ window.lookupFrenchWord = function(rawWord) {
 
   // 4. Accent-stripped match (e.g. "étais" -> "etais", "vécu" -> "vecu", "forêt" -> "foret")
   const noAcc = window.stripAccents(clean);
-  if (window.FRENCH_VOCAB_DB[noAcc] && clean.length > 2) {
+  if (window.FRENCH_VOCAB_DB[noAcc] && clean.length > 1) {
     return {
       word: rawWord,
       cleanWord: clean,
@@ -2834,7 +2834,37 @@ window.lookupFrenchWord = function(rawWord) {
     };
   }
 
-  // 2. Singularize plural 's' or 'x'
+  // 5. Singularize plural 'es', 's', 'x', or '-aux' -> '-al'
+  if (clean.endsWith('aux') && clean.length > 4) {
+    const singAl = noAcc.slice(0, -3) + 'al';
+    if (window.FRENCH_VOCAB_DB[singAl]) {
+      const match = window.FRENCH_VOCAB_DB[singAl];
+      return {
+        word: rawWord,
+        cleanWord: clean,
+        en: match.en + " (plural)",
+        pos: match.pos,
+        ipa: match.ipa,
+        gender: match.gender
+      };
+    }
+  }
+
+  if (clean.endsWith('es') && clean.length > 3) {
+    const singMasc = noAcc.slice(0, -2);
+    if (window.FRENCH_VOCAB_DB[singMasc]) {
+      const match = window.FRENCH_VOCAB_DB[singMasc];
+      return {
+        word: rawWord,
+        cleanWord: clean,
+        en: match.en + " (fem. pl.)",
+        pos: match.pos,
+        ipa: match.ipa,
+        gender: "f"
+      };
+    }
+  }
+
   if (clean.endsWith('s') && clean.length > 2) {
     const singular = window.stripAccents(clean.slice(0, -1));
     if (window.FRENCH_VOCAB_DB[singular]) {
@@ -2865,7 +2895,7 @@ window.lookupFrenchWord = function(rawWord) {
     }
   }
 
-  // 3. Feminine ending 'e'
+  // 6. Feminine ending 'e'
   if (clean.endsWith('e') && clean.length > 3) {
     const masc = window.stripAccents(clean.slice(0, -1));
     if (window.FRENCH_VOCAB_DB[masc]) {
@@ -2881,7 +2911,24 @@ window.lookupFrenchWord = function(rawWord) {
     }
   }
 
-  // 4. Passé simple verb forms (-a -> -er; -it -> -ir / -re)
+  // 7. Past participles (-é, -ée, -és, -ées -> -er)
+  if (/(é|ee|es|ees|e)$/.test(noAcc) && noAcc.length > 3) {
+    const ppStem = noAcc.replace(/(ees|ee|es|e)$/, '');
+    const infEr = ppStem + 'er';
+    if (ppStem.length >= 2 && window.FRENCH_VOCAB_DB[infEr]) {
+      const match = window.FRENCH_VOCAB_DB[infEr];
+      return {
+        word: rawWord,
+        cleanWord: clean,
+        en: match.en + ` [form of ${infEr}]`,
+        pos: "verbe / participe",
+        ipa: match.ipa || `/${clean}/`,
+        gender: ""
+      };
+    }
+  }
+
+  // 8. Passé simple verb forms (-a -> -er; -irent -> -ir / -er)
   if (noAcc.endsWith('a') && noAcc.length > 3) {
     const inf = noAcc.slice(0, -1) + 'er';
     if (window.FRENCH_VOCAB_DB[inf]) {
@@ -2913,7 +2960,7 @@ window.lookupFrenchWord = function(rawWord) {
     }
   }
 
-  // 5. General verb endings (imparfait, présent, futur, conditionnel)
+  // 9. General verb endings (imparfait, présent, futur, conditionnel)
   const verbEndings = ['assent', 'erions', 'eriez', 'erait', 'eront', 'aient', 'erent', 'ions', 'iez', 'ait', 'ais', 'ant', 'era', 'ent', 'ons', 'ez', 'er', 'ir', 're', 'ai', 'as', 'at', 'it'];
   for (const ending of verbEndings) {
     if (noAcc.endsWith(ending) && noAcc.length > ending.length + 2) {
@@ -2956,7 +3003,7 @@ window.lookupFrenchWord = function(rawWord) {
     }
   }
 
-  // 6. Adverbs ending in -ment
+  // 10. Adverbs ending in -ment
   if (noAcc.endsWith('ment') && noAcc.length > 5) {
     const adjStem = noAcc.slice(0, -4);
     if (window.FRENCH_VOCAB_DB[adjStem]) {
@@ -2972,14 +3019,15 @@ window.lookupFrenchWord = function(rawWord) {
     }
   }
 
-  // 7. Clean fallback with friendly tag
+  // 11. Mark as fallback so live dictionary lookup is always triggered
   return {
     word: rawWord,
     cleanWord: clean,
-    en: `French vocabulary: ${clean}`,
+    en: `Looking up "${rawTrim}"...`,
     pos: "mot",
     ipa: `/${clean}/`,
-    gender: ""
+    gender: "",
+    isFallback: true
   };
 };
 

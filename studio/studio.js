@@ -94,8 +94,10 @@
     renderStudioInspector();
     if (studioState.mode === "cards") {
       renderStudioFlashcard();
-    } else {
+    } else if (studioState.mode === "reader") {
       renderStudioReader();
+    } else if (studioState.mode === "sites") {
+      renderStudioSites();
     }
   }
 
@@ -470,7 +472,8 @@
       return html;
     }
 
-    const tokenRegex = /([a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ']+)|([^a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ']+)/g;
+    const tokenRegex =
+      /([a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]+)|([^a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]+)/g;
     let match;
     let html = "";
     while ((match = tokenRegex.exec(text)) !== null) {
@@ -483,9 +486,9 @@
           match[1]
         )}" data-ctx-target="${encodeURIComponent(
           ctxTarget
-        )}" data-ctx-en="${encodeURIComponent(ctxEn)}">${match[1]}</span>`;
+        )}" data-ctx-en="${encodeURIComponent(ctxEn)}">${escapeHtml(match[1])}</span>`;
       } else {
-        html += match[2] || "";
+        html += escapeHtml(match[2] || "");
       }
     }
     return html;
@@ -527,7 +530,7 @@
 
           <div class="flex flex-wrap items-center justify-between gap-2">
             <button class="st-reveal-line pro-btn px-3 py-1 rounded-xl text-xs font-semibold text-yellow-300" data-idx="${idx}">
-              ${showRef ? "🙈 Hide Reference" : "👁️ Comparer avec la référence"}
+              ${showRef ? "🙈 Hide Reference" : "👁️ Compare with Reference"}
             </button>
             <div class="star-rating-bar">
               ${[0, 1, 2, 3, 4]
@@ -616,33 +619,169 @@
     });
   }
 
-  function bindStudioEvents() {
-    document.getElementById("st-mode-cards")?.addEventListener("click", () => {
-      studioState.mode = "cards";
-      document
-        .getElementById("st-mode-cards")
-        .classList.replace("text-zinc-300", "bg-yellow-400");
-      document.getElementById("st-mode-cards").classList.add("text-zinc-950");
-      document
-        .getElementById("st-mode-reader")
-        .classList.remove("bg-yellow-400", "text-zinc-950");
-      document.getElementById("st-surface-cards")?.classList.remove("hidden");
-      document.getElementById("st-surface-reader")?.classList.add("hidden");
-      renderStudioAll();
-    });
+  function renderStudioSites() {
+    const lang = window.quizzlerStorage.data.targetLang;
+    const cfg = window.quizzlerStorage.getLangConfig(lang);
+    const recTitle = document.getElementById("st-rec-title");
+    if (recTitle) {
+      recTitle.textContent = `${cfg.flag} Curated Native ${cfg.name} Sites for Language Learning`;
+    }
 
-    document.getElementById("st-mode-reader")?.addEventListener("click", () => {
-      studioState.mode = "reader";
-      document
-        .getElementById("st-mode-reader")
-        .classList.add("bg-yellow-400", "text-zinc-950");
-      document
-        .getElementById("st-mode-cards")
-        .classList.remove("bg-yellow-400", "text-zinc-950");
-      document.getElementById("st-surface-cards")?.classList.add("hidden");
-      document.getElementById("st-surface-reader")?.classList.remove("hidden");
-      renderStudioAll();
+    const bmGrid = document.getElementById("st-bookmarks-grid");
+    if (bmGrid) {
+      const bookmarks = window.quizzlerStorage.getBookmarks("all");
+      if (bookmarks.length === 0) {
+        bmGrid.innerHTML = `<div class="col-span-2 p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-xs text-zinc-400 text-center">No bookmarked pages yet. Add a URL above or bookmark a recommended site below!</div>`;
+      } else {
+        bmGrid.innerHTML = bookmarks
+          .map((bm) => {
+            const bmCfg = window.quizzlerStorage.getLangConfig(bm.lang || "fr");
+            return `
+            <div class="p-4 rounded-2xl bg-zinc-900/85 border border-zinc-800 hover:border-yellow-400/50 transition flex flex-col justify-between gap-2.5">
+              <div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold text-sm text-white truncate">${bmCfg.flag} ${escapeHtml(
+              bm.title || bm.url
+            )}</span>
+                  <button type="button" class="st-del-bm pro-btn w-6 h-6 rounded-lg text-xs text-zinc-400 hover:text-red-400 shrink-0" data-url="${encodeURIComponent(
+                    bm.url
+                  )}" title="Remove Bookmark">✕</button>
+                </div>
+                <p class="text-xs text-zinc-400 mt-1 line-clamp-2">${escapeHtml(
+                  bm.note || bm.url
+                )}</p>
+                <div class="text-[10px] font-mono text-zinc-500 truncate mt-1">${escapeHtml(
+                  bm.url
+                )}</div>
+              </div>
+              <div class="flex justify-end">
+                <a href="${escapeHtml(
+                  bm.url
+                )}" target="_blank" rel="noopener noreferrer" class="pro-btn px-3 py-1.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs">
+                  Open & Immerse ↗
+                </a>
+              </div>
+            </div>
+          `;
+          })
+          .join("");
+
+        bmGrid.querySelectorAll(".st-del-bm").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const url = decodeURIComponent(btn.getAttribute("data-url") || "");
+            await window.quizzlerStorage.removeBookmark(url);
+            renderStudioSites();
+          });
+        });
+      }
+    }
+
+    const recGrid = document.getElementById("st-recommended-grid");
+    if (recGrid) {
+      const recSites = window.quizzlerStorage.getRecommendedSites(lang);
+      recGrid.innerHTML = recSites
+        .map((site) => {
+          const saved = window.quizzlerStorage.isUrlBookmarked(site.url);
+          return `
+          <div class="p-4 rounded-2xl bg-zinc-900/85 border border-zinc-800 hover:border-yellow-400/40 transition flex flex-col justify-between gap-3">
+            <div>
+              <div class="flex items-start justify-between gap-2">
+                <h3 class="font-bold text-sm text-white leading-snug">${escapeHtml(
+                  site.title
+                )}</h3>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 shrink-0">
+                  ${escapeHtml(site.level || "All Levels")}
+                </span>
+              </div>
+              <span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700">
+                ${escapeHtml(site.tag || "Native")}
+              </span>
+              <p class="text-xs text-zinc-400 mt-2 leading-relaxed">${escapeHtml(
+                site.desc || ""
+              )}</p>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <button type="button" class="st-toggle-rec-bm pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                saved ? "text-yellow-300 border-yellow-400/50" : "text-zinc-300"
+              }" data-url="${encodeURIComponent(site.url)}" data-title="${encodeURIComponent(
+            site.title
+          )}" data-note="${encodeURIComponent(site.desc || "")}">
+                ${saved ? "🔖 Bookmarked" : "🔖 Bookmark"}
+              </button>
+              <a href="${escapeHtml(
+                site.url
+              )}" target="_blank" rel="noopener noreferrer" class="pro-btn px-3.5 py-1.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs">
+                Visit Site ↗
+              </a>
+            </div>
+          </div>
+        `;
+        })
+        .join("");
+
+      recGrid.querySelectorAll(".st-toggle-rec-bm").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const url = decodeURIComponent(btn.getAttribute("data-url") || "");
+          const title = decodeURIComponent(btn.getAttribute("data-title") || "");
+          const note = decodeURIComponent(btn.getAttribute("data-note") || "");
+          await window.quizzlerStorage.toggleBookmark({ url, title, lang, note });
+          renderStudioSites();
+        });
+      });
+    }
+  }
+
+  function switchStudioMode(mode) {
+    studioState.mode = mode;
+    const modes = ["cards", "reader", "sites"];
+    modes.forEach((m) => {
+      const btn = document.getElementById(`st-mode-${m}`);
+      const surf = document.getElementById(`st-surface-${m}`);
+      if (btn) {
+        if (m === mode) {
+          btn.className =
+            "px-3.5 py-1.5 rounded-xl text-xs font-bold bg-yellow-400 text-zinc-950 transition";
+        } else {
+          btn.className =
+            "px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition";
+        }
+      }
+      if (surf) {
+        surf.classList.toggle("hidden", m !== mode);
+      }
     });
+    renderStudioAll();
+  }
+
+  function bindStudioEvents() {
+    document
+      .getElementById("st-mode-cards")
+      ?.addEventListener("click", () => switchStudioMode("cards"));
+    document
+      .getElementById("st-mode-reader")
+      ?.addEventListener("click", () => switchStudioMode("reader"));
+    document
+      .getElementById("st-mode-sites")
+      ?.addEventListener("click", () => switchStudioMode("sites"));
+
+    document
+      .getElementById("st-add-bookmark-form")
+      ?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const urlInput = document.getElementById("st-bookmark-url");
+        const titleInput = document.getElementById("st-bookmark-title");
+        const url = (urlInput?.value || "").trim();
+        if (!url) return;
+        const title = (titleInput?.value || "").trim() || url;
+        await window.quizzlerStorage.toggleBookmark({
+          url,
+          title,
+          lang: window.quizzlerStorage.data.targetLang
+        });
+        if (urlInput) urlInput.value = "";
+        if (titleInput) titleInput.value = "";
+        renderStudioSites();
+      });
 
     document.getElementById("st-lang-select")?.addEventListener("change", async (e) => {
       await window.quizzlerStorage.setTargetLang(e.target.value);
@@ -781,12 +920,12 @@
       });
     });
 
-    // Custom Paste & Translate Reader
+    // Custom Paste & Auto-Detect Reader
     document.getElementById("st-btn-toggle-paste")?.addEventListener("click", () => {
       document.getElementById("st-paste-box")?.classList.toggle("hidden");
     });
 
-    document.getElementById("st-btn-tokenize-raw")?.addEventListener("click", async () => {
+    document.getElementById("st-btn-immerse-raw")?.addEventListener("click", async () => {
       const raw = document.getElementById("st-paste-input")?.value.trim();
       if (!raw) return;
       const lang = window.quizzlerStorage.data.targetLang;
@@ -795,34 +934,32 @@
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const resp = await chrome.runtime.sendMessage({
-        type: "TRANSLATE_BATCH",
-        texts: lines,
-        sourceLang: lang,
+      // Detect language of the first line via service worker TRANSLATE_SINGLE
+      const probe = await chrome.runtime.sendMessage({
+        type: "TRANSLATE_SINGLE",
+        text: lines[0],
+        sourceLang: "auto",
         targetLang: "en"
       });
-      const results = resp?.results || lines.map((l) => ({ translated: "" }));
+      const detectedSource = (probe?.detectedLang || "").toLowerCase().split("-")[0];
+      const isAlreadyTarget =
+        detectedSource === lang ||
+        (lang === "ja" && /[\u3040-\u30ff\u4e00-\u9faf]/.test(raw));
 
-      studioState.readerLines = lines.map((l, idx) => ({
-        target: l,
-        en: results[idx]?.translated || "",
-        revealed: false
-      }));
-      studioState.userTranslations = {};
-      renderStudioReader();
-    });
-
-    document
-      .getElementById("st-btn-translate-raw")
-      ?.addEventListener("click", async () => {
-        const raw = document.getElementById("st-paste-input")?.value.trim();
-        if (!raw) return;
-        const lang = window.quizzlerStorage.data.targetLang;
-        const lines = raw
-          .split(/\n+/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-
+      if (isAlreadyTarget) {
+        const resp = await chrome.runtime.sendMessage({
+          type: "TRANSLATE_BATCH",
+          texts: lines,
+          sourceLang: lang,
+          targetLang: "en"
+        });
+        const results = resp?.results || lines.map(() => ({ translated: "" }));
+        studioState.readerLines = lines.map((l, idx) => ({
+          target: l,
+          en: results[idx]?.translated || "",
+          revealed: false
+        }));
+      } else {
         const resp = await chrome.runtime.sendMessage({
           type: "TRANSLATE_BATCH",
           texts: lines,
@@ -830,15 +967,16 @@
           targetLang: lang
         });
         const results = resp?.results || lines.map((l) => ({ translated: l }));
-
         studioState.readerLines = lines.map((orig, idx) => ({
           target: results[idx]?.translated || orig,
           en: orig,
           revealed: false
         }));
-        studioState.userTranslations = {};
-        renderStudioReader();
-      });
+      }
+
+      studioState.userTranslations = {};
+      renderStudioReader();
+    });
 
     // Keyboard shortcuts for Studio Flashcards
     window.addEventListener("keydown", (e) => {

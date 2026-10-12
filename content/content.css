@@ -5,15 +5,15 @@
  * interactive `.qz-word-token` highlights, Ruby Furigana modes, and 3D Index Cards.
  */
 
-/* Interactive Word Tokens on Webpages */
+/* Interactive Word Tokens on Webpages (Zero layout shift) */
 .qz-word-token {
   display: inline;
-  padding: 0px 2px;
-  margin: 0 0.5px;
-  border-radius: 5px;
+  padding: 0;
+  margin: 0;
+  border-radius: 3px;
   cursor: pointer;
   transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1.5px solid transparent;
   position: relative;
 }
 
@@ -35,9 +35,8 @@
 .qz-word-token.qz-active-token {
   background-color: #facc15 !important;
   color: #090a0f !important;
-  font-weight: 700 !important;
-  box-shadow: 0 0 12px rgba(250, 204, 21, 0.55) !important;
-  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.55) !important;
+  border-radius: 3px;
 }
 
 .qz-word-token.qz-phrase-selected {
@@ -268,13 +267,13 @@ html.qz-romaji-hidden .qz-romaji-subline {
   transform: translateY(0);
 }
 
-/* Floating Bottom-Right Quizzler Control Dock */
+/* Floating Bottom-Right Quizzler Control Dock (Defaults to OFF / Hidden) */
 #qz-floating-dock {
   position: fixed;
   bottom: 16px;
   right: 16px;
   z-index: 2147483642;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
@@ -284,6 +283,10 @@ html.qz-romaji-hidden .qz-romaji-subline {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(250, 204, 21, 0.35);
   box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.75);
+}
+
+#qz-floating-dock.qz-dock-visible {
+  display: flex;
 }
 
 .qz-dock-btn {

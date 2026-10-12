@@ -55,29 +55,34 @@
   <!-- Webpage Immersion Control Strip -->
   <section class="shrink-0 px-3.5 py-2.5 border-b border-zinc-800/80 bg-zinc-900/60 space-y-2">
     <div class="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-      <span>Active Tab Controls</span>
+      <span id="sp-page-detect-badge">Active Tab Controls</span>
       <span id="sp-vault-summary" class="text-yellow-400 font-bold">5 cards • 0 mastered</span>
     </div>
 
-    <div class="grid grid-cols-2 gap-1.5">
-      <button id="sp-btn-translate-page" class="pro-btn py-2 px-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow">
-        <span>🌐</span>
-        <span>Translate & Immerse</span>
+    <div class="flex items-center gap-1.5">
+      <button id="sp-btn-immerse-page" class="pro-btn flex-1 py-2 px-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow">
+        <span>✨</span>
+        <span id="sp-immerse-label">Immerse Page (Auto-Detect)</span>
       </button>
-      <button id="sp-btn-tokenize-page" class="pro-btn py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
-        <span>🔍</span>
-        <span>Tokenize Native Page</span>
+      <button id="sp-btn-bookmark-page" class="pro-btn py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 shrink-0" title="Bookmark current page for language learning">
+        <span>🔖</span>
+        <span id="sp-bookmark-label">Save</span>
       </button>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
-      <button id="sp-btn-immersion-mode" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-yellow-300 border-yellow-400/40">
-        <span>👁️</span>
-        <span id="sp-immersion-label">Immersion: Hide Ref</span>
+      <button id="sp-btn-toggle-overlay" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-zinc-300" title="Show or hide the floating Quizzler overlay bar on this webpage (Defaults to Off)">
+        <span>🧭</span>
+        <span id="sp-overlay-label">Overlay Bar: Off</span>
       </button>
 
-      <button id="sp-btn-restore-page" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold text-zinc-300">
-        🔄 Restore Page
+      <button id="sp-btn-immersion-mode" class="pro-btn px-2 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-yellow-300 border-yellow-400/40">
+        <span>👁️</span>
+        <span id="sp-immersion-label">Hide Ref</span>
+      </button>
+
+      <button id="sp-btn-restore-page" class="pro-btn px-2 py-1 rounded-xl text-[11px] font-semibold text-zinc-300" title="Restore original webpage">
+        🔄 Restore
       </button>
     </div>
 
@@ -96,14 +101,17 @@
   </section>
 
   <!-- Primary Navigation Tabs -->
-  <nav class="shrink-0 px-3.5 pt-2 border-b border-zinc-800/80 flex items-center gap-1.5 bg-zinc-950/60">
-    <button data-tab="inspector" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80">
-      📖 Inspector
+  <nav class="shrink-0 px-3 pt-2 border-b border-zinc-800/80 flex items-center gap-1 bg-zinc-950/60">
+    <button data-tab="inspector" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80">
+      📖 Inspect
     </button>
-    <button data-tab="flashcards" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
-      🗂️ 3D Cards
+    <button data-tab="flashcards" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+      🗂️ Cards
     </button>
-    <button data-tab="vault" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+    <button data-tab="sites" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+      🔖 Sites
+    </button>
+    <button data-tab="vault" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-[11px] font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
       🏦 Vault (<span id="sp-tab-vault-count">5</span>)
     </button>
   </nav>
@@ -290,7 +298,61 @@
     </div>
 
     <!-- ==========================================
-         TAB 3: REVIEW VAULT & JSON BACKUP
+         TAB 3: BOOKMARKS & RECOMMENDED NATIVE SITES
+         ========================================== -->
+    <div id="sp-view-sites" class="hidden space-y-3">
+      <!-- Bookmarked Learning Pages Section -->
+      <div class="pro-card rounded-3xl p-3.5 space-y-2.5 border border-zinc-700/80">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h3 class="text-xs font-display font-bold text-white flex items-center gap-1.5">
+              <span>🔖</span>
+              <span>Saved Learning Bookmarks</span>
+            </h3>
+            <p class="text-[10px] text-zinc-400">Your favorite reading & immersion pages</p>
+          </div>
+          <button id="sp-btn-bookmark-current-in-tab" class="pro-btn px-2.5 py-1 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-[10px] shrink-0">
+            + Save Active Tab
+          </button>
+        </div>
+
+        <!-- Custom Bookmark Add Form -->
+        <form id="sp-add-bookmark-form" class="flex items-center gap-1.5">
+          <input
+            type="url"
+            id="sp-bookmark-url-input"
+            placeholder="Paste URL (e.g. https://gutenberg.net.au/...)"
+            class="pro-input flex-1 px-2.5 py-1.5 rounded-xl text-[11px]"
+          />
+          <button type="submit" class="pro-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-yellow-300 border-yellow-400/40">
+            Add
+          </button>
+        </form>
+
+        <div id="sp-bookmarks-list" class="space-y-1.5 max-h-52 overflow-y-auto pr-0.5"></div>
+      </div>
+
+      <!-- Recommended Native Sites for Active Language -->
+      <div class="pro-card rounded-3xl p-3.5 space-y-2.5 border border-zinc-700/80">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h3 class="text-xs font-display font-bold text-white flex items-center gap-1.5">
+              <span>🌟</span>
+              <span id="sp-rec-sites-title">Recommended Native Sites</span>
+            </h3>
+            <p class="text-[10px] text-zinc-400">Curated native literature, news & stories</p>
+          </div>
+          <span id="sp-rec-sites-lang-badge" class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-yellow-400/20 text-yellow-300 border border-yellow-400/30">
+            🇫🇷 FR
+          </span>
+        </div>
+
+        <div id="sp-recommended-sites-list" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         TAB 4: REVIEW VAULT & JSON BACKUP
          ========================================== -->
     <div id="sp-view-vault" class="hidden space-y-3">
       <div class="grid grid-cols-3 gap-2 text-center">

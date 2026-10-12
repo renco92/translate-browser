@@ -17,6 +17,7 @@
   const state = {
     isPageTransformed: false,
     mode: null, // 'translated' | 'native' | null
+    detectedPageLang: null,
     activeInspectorWord: null,
     flashcardDeck: [],
     flashcardIndex: 0,
@@ -29,19 +30,30 @@
 
   async function initContentScript() {
     await window.quizzlerStorage.init();
+    state.detectedPageLang = detectPageLanguage();
     applyDocumentLanguageClasses();
     injectFloatingUI();
+    syncOverlayBarVisibility();
     bindGlobalEvents();
 
     window.quizzlerStorage.subscribe(() => {
       applyDocumentLanguageClasses();
+      syncOverlayBarVisibility();
       refreshTokenHighlightsOnPage();
       updateDockCounters();
+      updateDockButtons();
       if (state.activeInspectorWord && window.quizzlerStorage.data.selectedWord) {
         state.activeInspectorWord = window.quizzlerStorage.data.selectedWord;
         renderFloatingInspector();
       }
     });
+  }
+
+  function syncOverlayBarVisibility() {
+    const dock = document.getElementById("qz-floating-dock");
+    if (!dock) return;
+    const enabled = window.quizzlerStorage.isOverlayEnabledForPage(window.location.href);
+    dock.classList.toggle("qz-dock-visible", enabled);
   }
 
   function applyDocumentLanguageClasses() {
@@ -59,6 +71,103 @@
     } else {
       docEl.classList.add("qz-romaji-hidden");
     }
+  }
+
+  // ==========================================
+  // SMART LANGUAGE DETECTION FOR CURRENT PAGE
+  // ==========================================
+
+  function detectPageLanguage() {
+    const blocks = collectCandidateBlocks().slice(0, 25);
+    const sampleText = blocks
+      .map((el) => el.innerText || "")
+      .join(" ")
+      .slice(0, 5000);
+
+    if (sampleText.length >= 20) {
+      // Check for Japanese Kana / Kanji characters
+      const jaMatches = sampleText.match(/[\u3040-\u30ff\u4e00-\u9faf]/g);
+      if (jaMatches && jaMatches.length >= 8) {
+        return "ja";
+      }
+
+      const lower = ` ${sampleText.toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'")} `;
+      const words = lower.match(/[a-zà-ÿœæñß]+/g) || [];
+      if (words.length >= 15) {
+        const stopwords = {
+          fr: new Set([
+            "le", "la", "les", "des", "un", "une", "du", "au", "aux", "dans", "pour",
+            "pas", "plus", "avec", "sur", "est", "sont", "était", "mais", "comme",
+            "cette", "tout", "fait", "nous", "vous", "ils", "elle", "qui", "que",
+            "quoi", "dont", "où", "très", "bien", "petit", "même", "aussi", "alors"
+          ]),
+          es: new Set([
+            "el", "la", "los", "las", "un", "una", "del", "al", "en", "por", "para",
+            "con", "sin", "sobre", "entre", "está", "son", "era", "pero", "como",
+            "esta", "este", "todo", "hace", "nosotros", "ellos", "ella", "que",
+            "quien", "donde", "muy", "bien", "también", "cuando", "porque", "más"
+          ]),
+          de: new Set([
+            "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "einem",
+            "und", "in", "mit", "auf", "für", "von", "zu", "ist", "sind", "war",
+            "aber", "wie", "diese", "dieser", "alles", "wir", "sie", "ich", "nicht",
+            "auch", "noch", "nach", "über", "wenn", "노"
+          ]),
+          it: new Set([
+            "il", "lo", "la", "gli", "le", "un", "una", "del", "della", "nel", "nella",
+            "con", "su", "per", "tra", "fra", "è", "sono", "era", "ma", "come",
+            "questa", "questo", "tutto", "fatto", "noi", "loro", "lei", "che", "chi",
+            "dove", "molto", "bene", "anche", "quando", "perché", "più"
+          ]),
+          en: new Set([
+            "the", "and", "that", "have", "for", "not", "with", "you", "this", "but",
+            "his", "from", "they", "say", "her", "she", "will", "one", "all", "would",
+            "there", "their", "what", "out", "about", "who", "get", "which", "when"
+          ])
+        };
+
+        const scores = { fr: 0, es: 0, de: 0, it: 0, en: 0 };
+        for (const w of words) {
+          for (const [langCode, set] of Object.entries(stopwords)) {
+            if (set.has(w)) scores[langCode]++;
+          }
+        }
+
+        // Boost French elisions (d'un, l'on, qu'il, c'est, j'ai, n'est, s'il)
+        const frElisions = lower.match(/\b(c'est|qu'il|d'un|d'une|l'on|j'ai|n'est|s'il|qu'on)\b/g);
+        if (frElisions) scores.fr += frElisions.length * 2;
+
+        let bestLang = "en";
+        let bestScore = -1;
+        for (const [langCode, sc] of Object.entries(scores)) {
+          if (sc > bestScore) {
+            bestScore = sc;
+            bestLang = langCode;
+          }
+        }
+
+        if (bestScore >= 3) {
+          return bestLang;
+        }
+      }
+    }
+
+    const htmlLang = (document.documentElement.getAttribute("lang") || "")
+      .toLowerCase()
+      .split("-")[0]
+      .trim();
+    if (["fr", "ja", "es", "de", "it", "en"].includes(htmlLang)) {
+      return htmlLang;
+    }
+
+    return "en";
+  }
+
+  function isPageAlreadyInTargetLang() {
+    const targetLang = window.quizzlerStorage.data.targetLang;
+    const detected = detectPageLanguage();
+    state.detectedPageLang = detected;
+    return detected === targetLang;
   }
 
   // ==========================================
@@ -121,8 +230,9 @@
       return html;
     }
 
-    // Latin/European scripts (French, Spanish, German, Italian, etc.)
-    const tokenRegex = /([a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ']+)|([^a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ']+)/g;
+    // Latin/European scripts (supports straight and curly apostrophes: ', ’, ʼ)
+    const tokenRegex =
+      /([a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]+)|([^a-zA-ZÀ-ÿœŒæÆñÑßäöüÄÖÜ'’ʼ]+)/g;
     let match;
     let html = "";
     let tokIdx = 0;
@@ -142,10 +252,10 @@
           contextTarget
         )}" data-qz-ctx-en="${encodeURIComponent(
           contextEn
-        )}" data-qz-block="${blockIndex}" data-qz-tok="${tokIdx}">${word}</span>`;
+        )}" data-qz-block="${blockIndex}" data-qz-tok="${tokIdx}">${escapeHtml(word)}</span>`;
         tokIdx++;
       } else if (sep) {
-        html += sep;
+        html += escapeHtml(sep);
       }
     }
 
@@ -184,7 +294,7 @@
 
   // ==========================================
   // PAGE TRANSLATION & NATIVE TOKENIZATION
-  // (Batched with requestAnimationFrame + scheduler.yield)
+  // (Preserves all DOM child elements, <br>, <a>, alignment & formatting)
   // ==========================================
 
   function collectCandidateBlocks() {
@@ -193,16 +303,91 @@
     return all.filter((el) => {
       if (el.closest(".qz-ui-root") || el.closest(".qz-trans-drawer")) return false;
       if (el.closest("nav, footer, script, style, code, pre, svg, button, form")) return false;
-      // Skip elements that contain nested block candidates to avoid breaking parent layout
       if (el.querySelector("p, h1, h2, h3, h4, ul, ol, table")) return false;
 
       const text = (el.innerText || "").trim();
-      if (text.length < 8) return false;
+      if (text.length < 4) return false;
 
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return false;
       return true;
     });
+  }
+
+  /**
+   * Decides whether a block should receive the inline `🔊` + `✍️ Compare` pill.
+   * Avoids adding pills to headings, short centered lines, or table-of-contents link lists
+   * so page layout and text alignment never shift.
+   */
+  function shouldAttachParagraphActions(el) {
+    const tag = el.tagName.toUpperCase();
+    if (tag !== "P" && tag !== "BLOCKQUOTE" && tag !== "LI") return false;
+
+    const totalText = (el.innerText || "").trim();
+    if (totalText.length < 45) return false;
+
+    // Skip if element is primarily a list of links (e.g. Table of Contents)
+    const links = Array.from(el.querySelectorAll("a"));
+    if (links.length > 0) {
+      const linkTextLen = links.reduce((acc, a) => acc + (a.innerText || "").trim().length, 0);
+      if (linkTextLen > totalText.length * 0.5) return false;
+    }
+
+    // Skip centered titles/epigraphs so centering is never offset
+    try {
+      const style = window.getComputedStyle(el);
+      if (style.textAlign === "center") return false;
+    } catch (e) {}
+
+    return true;
+  }
+
+  /**
+   * Collects non-empty DOM Text nodes inside an element while skipping script/style,
+   * Quizzler UI elements, and in-page anchor jump links (`<a href="#...">`).
+   */
+  function getTransformableTextNodes(el) {
+    const textNodes = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || !node.nodeValue.trim()) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        const parent = node.parentElement;
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        if (
+          parent.closest(
+            ".qz-ui-root, .qz-para-actions, .qz-romaji-subline, script, style, code, pre"
+          )
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        // Preserve in-page TOC anchor jump links (<a href="#c1">) so clicking jumps to chapter
+        const anchor = parent.closest("a[href]");
+        if (anchor && (anchor.getAttribute("href") || "").trim().startsWith("#")) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    let current;
+    while ((current = walker.nextNode())) {
+      textNodes.push(current);
+    }
+    return textNodes;
+  }
+
+  /**
+   * Smart unified entry point: auto-detects whether the page is already in the user's
+   * target language. If so, tokenizes in-place; otherwise translates & tokenizes.
+   */
+  async function smartImmersePage() {
+    if (isPageAlreadyInTargetLang()) {
+      await tokenizeNativePage();
+    } else {
+      await translateAndTokenizePage();
+    }
   }
 
   async function translateAndTokenizePage() {
@@ -212,7 +397,7 @@
 
     const lang = window.quizzlerStorage.data.targetLang;
     const langCfg = window.quizzlerStorage.getLangConfig(lang);
-    const blocks = collectCandidateBlocks().slice(0, 80); // Cap at 80 primary blocks for snappy UX
+    const blocks = collectCandidateBlocks().slice(0, 85);
 
     if (blocks.length === 0) {
       showToast("No readable text blocks found on this page.");
@@ -220,37 +405,106 @@
     }
 
     showToast(`${langCfg.flag} Translating ${blocks.length} blocks into ${langCfg.nativeName}...`);
-    const btnTranslate = document.getElementById("qz-dock-btn-translate");
-    if (btnTranslate) {
-      btnTranslate.textContent = "⏳ Translating...";
-      btnTranslate.disabled = true;
+    const btnImmerse = document.getElementById("qz-dock-btn-immerse");
+    if (btnImmerse) {
+      btnImmerse.textContent = "⏳ Immersing...";
+      btnImmerse.disabled = true;
     }
 
     try {
       const BATCH_SIZE = 10;
       for (let i = 0; i < blocks.length; i += BATCH_SIZE) {
         const batchEls = blocks.slice(i, i + BATCH_SIZE);
-        const rawTexts = batchEls.map((el) => (el.innerText || "").trim());
 
-        const resp = await chrome.runtime.sendMessage({
-          type: "TRANSLATE_BATCH",
-          texts: rawTexts,
-          sourceLang: "auto",
-          targetLang: lang
+        // Collect all transformable text nodes across the batch so child tags (<br>, <a>, <em>) stay intact
+        const blockRecords = batchEls.map((el, idx) => {
+          const textNodes = getTransformableTextNodes(el);
+          return {
+            el,
+            blockIndex: i + idx,
+            origBlockText: (el.innerText || "").trim(),
+            textNodes,
+            nodeStrings: textNodes.map((n) => n.nodeValue)
+          };
         });
 
-        const translatedList = resp?.results || rawTexts.map((t) => ({ original: t, translated: t }));
+        const flatStrings = [];
+        blockRecords.forEach((rec) => {
+          rec.nodeStrings.forEach((s) => flatStrings.push(s.trim()));
+        });
 
-        // Batch DOM updates inside requestAnimationFrame per MV3 Rule #6
+        let translatedFlat = [];
+        if (flatStrings.length > 0) {
+          const resp = await chrome.runtime.sendMessage({
+            type: "TRANSLATE_BATCH",
+            texts: flatStrings,
+            sourceLang: "auto",
+            targetLang: lang
+          });
+          translatedFlat =
+            resp?.results || flatStrings.map((t) => ({ original: t, translated: t }));
+        }
+
         await new Promise((resolve) =>
           requestAnimationFrame(() => {
-            batchEls.forEach((el, idx) => {
-              const blockIndex = i + idx;
-              const origText = rawTexts[idx];
-              const targetText = translatedList[idx]?.translated || origText;
-              const romajiText = translatedList[idx]?.romaji || "";
+            let flatCursor = 0;
+            blockRecords.forEach((rec) => {
+              const { el, blockIndex, origBlockText, textNodes, nodeStrings } = rec;
+              if (textNodes.length === 0) return;
 
-              applyBlockTransformation(el, targetText, origText, lang, blockIndex, romajiText);
+              if (!el.hasAttribute("data-qz-orig-html")) {
+                el.setAttribute("data-qz-orig-html", el.innerHTML);
+                el.setAttribute("data-qz-orig-text", origBlockText);
+              }
+
+              const translatedSegments = [];
+              const romajiSegments = [];
+
+              textNodes.forEach((textNode, nIdx) => {
+                const rawVal = nodeStrings[nIdx];
+                const leadMatch = rawVal.match(/^\s*/);
+                const trailMatch = rawVal.match(/\s*$/);
+                const leadingSpace = leadMatch ? leadMatch[0] : "";
+                const trailingSpace = trailMatch ? trailMatch[0] : "";
+
+                const transItem = translatedFlat[flatCursor++] || {
+                  translated: rawVal.trim(),
+                  romaji: ""
+                };
+                const translatedCore = transItem.translated || rawVal.trim();
+                translatedSegments.push(translatedCore);
+                if (transItem.romaji) romajiSegments.push(transItem.romaji);
+
+                const fullNodeTranslated = `${leadingSpace}${translatedCore}${trailingSpace}`;
+                const tokenizedHtml = tokenizeSentenceHtml(
+                  fullNodeTranslated,
+                  lang,
+                  translatedCore,
+                  rawVal.trim(),
+                  blockIndex
+                );
+
+                const temp = document.createElement("span");
+                temp.innerHTML = tokenizedHtml;
+                const frag = document.createDocumentFragment();
+                while (temp.firstChild) {
+                  frag.appendChild(temp.firstChild);
+                }
+                textNode.parentNode?.replaceChild(frag, textNode);
+              });
+
+              const fullTargetText = translatedSegments.join(" ");
+              el.setAttribute("data-qz-block-id", String(blockIndex));
+              el.setAttribute("data-qz-target-text", fullTargetText);
+              el.setAttribute("data-qz-ref-en", origBlockText);
+
+              if (shouldAttachParagraphActions(el)) {
+                appendParagraphActionsAndRomaji(
+                  el,
+                  blockIndex,
+                  lang === "ja" ? romajiSegments.join(" ") : ""
+                );
+              }
             });
             resolve();
           })
@@ -269,11 +523,11 @@
 
       window.quizzlerSound.playCorrectChime();
       showToast(
-        `${langCfg.flag} Page translated to ${langCfg.nativeName}! Click any word to inspect.`
+        `${langCfg.flag} Translated & tokenized in ${langCfg.nativeName}! Click any word.`
       );
     } catch (err) {
       console.error("Translate page error:", err);
-      showToast("⚠️ Translation error. Try Tokenize Native mode.");
+      showToast("⚠️ Translation error. Tokenizing in-place instead.");
     } finally {
       updateDockButtons();
     }
@@ -286,22 +540,21 @@
 
     const lang = window.quizzlerStorage.data.targetLang;
     const langCfg = window.quizzlerStorage.getLangConfig(lang);
-    const blocks = collectCandidateBlocks().slice(0, 100);
+    const blocks = collectCandidateBlocks().slice(0, 120);
 
     if (blocks.length === 0) {
       showToast("No readable text blocks found on this page.");
       return;
     }
 
-    const BATCH_SIZE = 20;
+    const BATCH_SIZE = 25;
     for (let i = 0; i < blocks.length; i += BATCH_SIZE) {
       const batchEls = blocks.slice(i, i + BATCH_SIZE);
       await new Promise((resolve) =>
         requestAnimationFrame(() => {
           batchEls.forEach((el, idx) => {
             const blockIndex = i + idx;
-            const nativeText = (el.innerText || "").trim();
-            applyBlockTransformation(el, nativeText, "", lang, blockIndex, "");
+            tokenizeElementPreservingDom(el, lang, blockIndex);
           });
           resolve();
         })
@@ -315,52 +568,62 @@
     state.mode = "native";
     window.quizzlerSound.playCorrectChime();
     showToast(
-      `${langCfg.flag} Tokenized ${blocks.length} blocks in ${langCfg.nativeName}! Click any word.`
+      `${langCfg.flag} Immersed ${blocks.length} blocks in ${langCfg.nativeName}! Click any word.`
     );
     updateDockButtons();
   }
 
-  function applyBlockTransformation(
-    el,
-    targetText,
-    referenceEnText,
-    lang,
-    blockIndex,
-    romajiText = ""
-  ) {
+  function tokenizeElementPreservingDom(el, lang, blockIndex) {
+    const textNodes = getTransformableTextNodes(el);
+    if (textNodes.length === 0) return;
+
+    const fullBlockText = (el.innerText || "").trim();
     if (!el.hasAttribute("data-qz-orig-html")) {
       el.setAttribute("data-qz-orig-html", el.innerHTML);
-      el.setAttribute("data-qz-orig-text", el.innerText || "");
+      el.setAttribute("data-qz-orig-text", fullBlockText);
     }
     el.setAttribute("data-qz-block-id", String(blockIndex));
-    el.setAttribute("data-qz-target-text", targetText);
-    el.setAttribute("data-qz-ref-en", referenceEnText || "");
+    el.setAttribute("data-qz-target-text", fullBlockText);
+    el.setAttribute("data-qz-ref-en", "");
 
-    const tokenizedHtml = tokenizeSentenceHtml(
-      targetText,
-      lang,
-      targetText,
-      referenceEnText,
-      blockIndex
-    );
+    textNodes.forEach((textNode) => {
+      const rawVal = textNode.nodeValue || "";
+      const sentenceCtx = rawVal.trim().length >= 12 ? rawVal.trim() : fullBlockText;
+      const tokenizedHtml = tokenizeSentenceHtml(rawVal, lang, sentenceCtx, "", blockIndex);
+      const temp = document.createElement("span");
+      temp.innerHTML = tokenizedHtml;
+      const frag = document.createDocumentFragment();
+      while (temp.firstChild) {
+        frag.appendChild(temp.firstChild);
+      }
+      textNode.parentNode?.replaceChild(frag, textNode);
+    });
 
-    const romajiHtml =
-      lang === "ja" && romajiText
-        ? `<span class="qz-romaji-subline">${escapeHtml(romajiText)}</span>`
-        : "";
+    if (shouldAttachParagraphActions(el)) {
+      appendParagraphActionsAndRomaji(el, blockIndex, "");
+    }
+  }
 
-    const actionsHtml = `
-      <span class="qz-para-actions" contenteditable="false">
-        <button type="button" class="qz-para-btn qz-btn-speak-para" data-qz-block="${blockIndex}" title="Listen to pronunciation">
-          🔊
-        </button>
-        <button type="button" class="qz-para-btn qz-btn-compare-para" data-qz-block="${blockIndex}" title="Translate & Compare with Reference (0-4★)">
-          ✍️ Compare
-        </button>
-      </span>
+  function appendParagraphActionsAndRomaji(el, blockIndex, romajiText) {
+    const actionsSpan = document.createElement("span");
+    actionsSpan.className = "qz-para-actions";
+    actionsSpan.setAttribute("contenteditable", "false");
+    actionsSpan.innerHTML = `
+      <button type="button" class="qz-para-btn qz-btn-speak-para" data-qz-block="${blockIndex}" title="Listen to pronunciation">
+        🔊
+      </button>
+      <button type="button" class="qz-para-btn qz-btn-compare-para" data-qz-block="${blockIndex}" title="Translate & Compare with Reference (0-4★)">
+        ✍️ Compare
+      </button>
     `;
+    el.appendChild(actionsSpan);
 
-    el.innerHTML = `${tokenizedHtml}${actionsHtml}${romajiHtml}`;
+    if (romajiText) {
+      const romajiSpan = document.createElement("span");
+      romajiSpan.className = "qz-romaji-subline";
+      romajiSpan.textContent = romajiText;
+      el.appendChild(romajiSpan);
+    }
   }
 
   function restoreOriginalPage() {
@@ -678,7 +941,7 @@
         </div>
       </div>
 
-      <!-- Bottom-Right Floating Quizzler Control Dock -->
+      <!-- Bottom-Right Floating Quizzler Control Dock (Hidden by default unless enabled on site) -->
       <div id="qz-floating-dock">
         <select id="qz-dock-lang" class="qz-dock-select" title="Select Target Learning Language">
           <option value="fr">🇫🇷 FR</option>
@@ -688,12 +951,8 @@
           <option value="it">🇮🇹 IT</option>
         </select>
 
-        <button type="button" id="qz-dock-btn-translate" class="qz-dock-btn qz-primary" title="Translate webpage into target language & make every word clickable">
-          🌐 Translate & Immerse
-        </button>
-
-        <button type="button" id="qz-dock-btn-tokenize" class="qz-dock-btn" title="Already on a target-language site? Make every word clickable!">
-          🔍 Tokenize Native
+        <button type="button" id="qz-dock-btn-immerse" class="qz-dock-btn qz-primary" title="Auto-detects page language: tokenizes in-place if already in target language, or translates & tokenizes">
+          ✨ Immerse Page
         </button>
 
         <button type="button" id="qz-dock-btn-restore" class="qz-dock-btn" style="display:none;" title="Restore original webpage">
@@ -704,12 +963,20 @@
           あ Furigana: Always
         </button>
 
+        <button type="button" id="qz-dock-btn-bookmark" class="qz-dock-btn" title="Bookmark this page for language learning">
+          🔖
+        </button>
+
         <button type="button" id="qz-dock-btn-cards" class="qz-dock-btn" title="Practice 3D Flashcards on this page">
           🗂️ <span id="qz-dock-card-count">5</span>
         </button>
 
         <button type="button" id="qz-dock-btn-sidepanel" class="qz-dock-btn" title="Open Quizzler Side Panel">
           📐 Panel
+        </button>
+
+        <button type="button" id="qz-dock-btn-hide" class="qz-dock-btn" style="padding:6px 9px;color:#a1a1aa;" title="Hide overlay bar on this site (Re-enable anytime from Side Panel)">
+          ✕
         </button>
       </div>
     `;
@@ -743,14 +1010,34 @@
   }
 
   function updateDockButtons() {
-    const btnTranslate = document.getElementById("qz-dock-btn-translate");
+    const btnImmerse = document.getElementById("qz-dock-btn-immerse");
     const btnRestore = document.getElementById("qz-dock-btn-restore");
-    if (btnTranslate) {
-      btnTranslate.disabled = false;
-      btnTranslate.textContent = "🌐 Translate & Immerse";
+    const btnBookmark = document.getElementById("qz-dock-btn-bookmark");
+    const lang = window.quizzlerStorage.data.targetLang;
+    const langCfg = window.quizzlerStorage.getLangConfig(lang);
+    const isNative = isPageAlreadyInTargetLang();
+
+    if (btnImmerse) {
+      btnImmerse.disabled = false;
+      if (state.isPageTransformed) {
+        btnImmerse.textContent =
+          state.mode === "native"
+            ? `✨ Immersed (${lang.toUpperCase()} Native)`
+            : `✨ Immersed (→ ${lang.toUpperCase()})`;
+      } else {
+        btnImmerse.textContent = isNative
+          ? `✨ Immerse (${langCfg.flag} Native)`
+          : `✨ Translate & Immerse (${langCfg.flag})`;
+      }
     }
     if (btnRestore) {
       btnRestore.style.display = state.isPageTransformed ? "inline-flex" : "none";
+    }
+    if (btnBookmark) {
+      const saved = window.quizzlerStorage.isUrlBookmarked(window.location.href);
+      btnBookmark.textContent = saved ? "🔖 Saved" : "🔖";
+      btnBookmark.style.borderColor = saved ? "#facc15" : "";
+      btnBookmark.style.color = saved ? "#fde047" : "";
     }
   }
 
@@ -783,6 +1070,9 @@
     if (syncMeta) {
       syncMeta.contextTarget = ctxTarget;
       syncMeta.contextEn = ctxEn;
+      if (syncMeta.isFallback) {
+        syncMeta.en = "⏳ Looking up definition...";
+      }
       state.activeInspectorWord = syncMeta;
       renderFloatingInspector();
     }
@@ -1210,20 +1500,42 @@
       const newLang = e.target.value;
       await window.quizzlerStorage.setTargetLang(newLang);
       const cfg = window.quizzlerStorage.getLangConfig(newLang);
+      updateDockButtons();
       showToast(`${cfg.flag} Switched target language to ${cfg.nativeName}`);
     });
 
     document
-      .getElementById("qz-dock-btn-translate")
-      ?.addEventListener("click", () => translateAndTokenizePage());
-
-    document
-      .getElementById("qz-dock-btn-tokenize")
-      ?.addEventListener("click", () => tokenizeNativePage());
+      .getElementById("qz-dock-btn-immerse")
+      ?.addEventListener("click", () => smartImmersePage());
 
     document
       .getElementById("qz-dock-btn-restore")
       ?.addEventListener("click", () => restoreOriginalPage());
+
+    document
+      .getElementById("qz-dock-btn-bookmark")
+      ?.addEventListener("click", async () => {
+        const res = await window.quizzlerStorage.toggleBookmark({
+          url: window.location.href,
+          title: document.title || window.location.hostname,
+          lang: window.quizzlerStorage.data.targetLang
+        });
+        updateDockButtons();
+        if (res.added) {
+          window.quizzlerSound.playCorrectChime();
+          showToast("🔖 Bookmarked this page for language learning!");
+        } else {
+          showToast("Removed page from learning bookmarks.");
+        }
+      });
+
+    document
+      .getElementById("qz-dock-btn-hide")
+      ?.addEventListener("click", async () => {
+        await window.quizzlerStorage.setOverlayEnabledForPage(window.location.href, false);
+        syncOverlayBarVisibility();
+        showToast("Overlay bar hidden on this site. Enable anytime from the Side Panel.");
+      });
 
     document
       .getElementById("qz-dock-btn-furigana")
@@ -1436,7 +1748,14 @@
     // Listen for messages from Side Panel or Service Worker
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
-        if (message.type === "TRIGGER_TRANSLATE_PAGE") {
+        if (message.type === "TRIGGER_SMART_IMMERSE_PAGE") {
+          await smartImmersePage();
+          sendResponse({
+            ok: true,
+            mode: state.mode,
+            detectedPageLang: state.detectedPageLang
+          });
+        } else if (message.type === "TRIGGER_TRANSLATE_PAGE") {
           await translateAndTokenizePage();
           sendResponse({ ok: true, mode: state.mode });
         } else if (message.type === "TRIGGER_TOKENIZE_NATIVE_PAGE") {
@@ -1445,6 +1764,38 @@
         } else if (message.type === "TRIGGER_RESTORE_PAGE") {
           restoreOriginalPage();
           sendResponse({ ok: true, mode: null });
+        } else if (message.type === "TOGGLE_FLOATING_BAR") {
+          const nextState = await window.quizzlerStorage.toggleOverlayForPage(
+            window.location.href
+          );
+          syncOverlayBarVisibility();
+          showToast(
+            nextState
+              ? "🧭 Quizzler overlay bar enabled for this page."
+              : "Overlay bar hidden for this page."
+          );
+          sendResponse({ ok: true, overlayEnabled: nextState });
+        } else if (message.type === "SET_FLOATING_BAR") {
+          const enabled = Boolean(message.enabled);
+          await window.quizzlerStorage.setOverlayEnabledForPage(
+            window.location.href,
+            enabled
+          );
+          syncOverlayBarVisibility();
+          sendResponse({ ok: true, overlayEnabled: enabled });
+        } else if (message.type === "BOOKMARK_CURRENT_PAGE") {
+          const res = await window.quizzlerStorage.toggleBookmark({
+            url: window.location.href,
+            title: document.title || window.location.hostname,
+            lang: window.quizzlerStorage.data.targetLang
+          });
+          updateDockButtons();
+          showToast(
+            res.added
+              ? "🔖 Bookmarked this page for language learning!"
+              : "Removed page from learning bookmarks."
+          );
+          sendResponse({ ok: true, isBookmarked: res.added });
         } else if (message.type === "INSPECT_TEXT_SELECTION") {
           const text = (message.text || "").trim();
           if (text.includes(" ")) {
@@ -1464,10 +1815,17 @@
           }
           sendResponse({ ok: true });
         } else if (message.type === "GET_PAGE_STATUS") {
+          const isNative = isPageAlreadyInTargetLang();
           sendResponse({
             ok: true,
             isPageTransformed: state.isPageTransformed,
             mode: state.mode,
+            detectedPageLang: state.detectedPageLang,
+            isNativeTargetLang: isNative,
+            overlayEnabled: window.quizzlerStorage.isOverlayEnabledForPage(
+              window.location.href
+            ),
+            isBookmarked: window.quizzlerStorage.isUrlBookmarked(window.location.href),
             url: window.location.href,
             title: document.title
           });
