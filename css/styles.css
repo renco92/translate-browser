@@ -1,0 +1,467 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Space+Grotesk:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+
+/* Base typography: Montserrat */
+body, button, input, select, textarea {
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Custom professional scrollbars */
+::-webkit-scrollbar {
+width: 5px;
+height: 5px;
+}
+::-webkit-scrollbar-track {
+background: #121316;
+}
+::-webkit-scrollbar-thumb {
+background: #3f3f46;
+border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+background: #52525b;
+}
+
+/* Professional dark gray panels */
+.pro-card {
+background: rgba(24, 24, 27, 0.92);
+backdrop-filter: blur(16px);
+-webkit-backdrop-filter: blur(16px);
+border: 1px solid rgba(63, 63, 70, 0.55);
+box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.65);
+}
+
+.pro-btn {
+transition: all 0.15s ease;
+border: 1px solid rgba(63, 63, 70, 0.6);
+background: rgba(39, 39, 42, 0.85);
+color: #f4f4f5;
+}
+.pro-btn:hover {
+background: #3f3f46;
+border-color: #71717a;
+color: #ffffff;
+}
+.pro-btn:active {
+transform: translateY(1px);
+}
+
+.pro-input {
+background: rgba(18, 18, 20, 0.95);
+border: 1px solid rgba(63, 63, 70, 0.7);
+color: #f4f4f5;
+transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pro-input:focus {
+border-color: #eab308;
+box-shadow: 0 0 0 1px #eab308, 0 0 16px -2px rgba(234, 179, 8, 0.25);
+outline: none;
+}
+
+/* Shake animation on invalid input */
+@keyframes shake {
+0%, 100% { transform: translateX(0); }
+20%, 60% { transform: translateX(-5px); }
+40%, 80% { transform: translateX(5px); }
+}
+.shake-error {
+animation: shake 0.4s ease-in-out;
+border-color: #ef4444 !important;
+box-shadow: 0 0 16px rgba(239, 68, 68, 0.45) !important;
+}
+
+/* Globe canvas container */
+#globe-container {
+position: absolute;
+inset: 0;
+width: 100%;
+height: 100%;
+z-index: 1;
+overflow: hidden;
+touch-action: none;
+}
+
+/* Clean dark charcoal background vignette */
+.pro-bg {
+  background: radial-gradient(circle at 50% 35%, #18191f 0%, #0d0e12 70%, #060608 100%);
+}
+
+/* ========================================================
+   FRENCH LEARNING & ROTE INDEX CARD STYLES
+   ======================================================== */
+
+/* Interactive Word Tokens */
+.word-token {
+  display: inline-block;
+  padding: 0px 3px;
+  margin: 1px 1px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease-in-out;
+  border-bottom: 2px solid transparent;
+}
+
+.word-token:hover {
+  background: rgba(250, 204, 21, 0.18);
+  color: #fde047;
+  transform: translateY(-1px);
+}
+
+/* Word token in user's review list */
+.word-token.in-review {
+  border-bottom: 2px solid #facc15;
+  color: #fef08a;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+/* Word token mastered */
+.word-token.mastered {
+  border-bottom: 2px solid #34d399;
+  color: #a7f3d0;
+  background: rgba(52, 211, 153, 0.08);
+}
+
+/* Active clicked token */
+.word-token.active-token {
+  background: #facc15 !important;
+  color: #090a0f !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.45);
+  transform: scale(1.05);
+}
+
+/* Multi-word phrase selection highlight */
+.word-token.phrase-selected {
+  background: rgba(250, 204, 21, 0.28) !important;
+  color: #fef08a !important;
+  border-bottom: 2px dashed #facc15 !important;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.2);
+}
+
+/* Tokens that are part of a saved phrase in review */
+.word-token.in-phrase-review {
+  border-bottom: 2px dotted #fbbf24;
+}
+
+/* 3D Tactile Index Card Flipper */
+.card-scene {
+  perspective: 1200px;
+}
+
+.card-3d {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.card-3d.is-flipped,
+#card-3d-flipper.is-flipped,
+.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.card-face-back {
+  transform: rotateY(180deg);
+}
+
+/* ========================================================
+   USER TRANSLATION WORKSPACE & 0-4 STAR SELF-ASSESSMENT
+   ======================================================== */
+
+.user-trans-input {
+  background: rgba(18, 19, 22, 0.95);
+  border: 1px solid rgba(63, 63, 70, 0.55);
+  color: #f4f4f5;
+  transition: all 0.15s ease-in-out;
+  resize: vertical;
+  min-height: 42px;
+}
+
+.user-trans-input:focus {
+  border-color: #facc15;
+  background: rgba(24, 25, 30, 0.98);
+  box-shadow: 0 0 0 1px #facc15, 0 0 12px rgba(250, 204, 21, 0.2);
+  outline: none;
+}
+
+/* 0-4 Star Rating System */
+.star-rating-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.star-btn {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  border: 1px solid rgba(63, 63, 70, 0.5);
+  background: rgba(24, 24, 27, 0.8);
+  color: #a1a1aa;
+}
+
+.star-btn:hover {
+  border-color: #facc15;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.star-btn.star-0.active {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.star-btn.star-1.active {
+  background: rgba(249, 115, 22, 0.25);
+  border-color: #f97316;
+  color: #fdba74;
+}
+
+.star-btn.star-2.active {
+  background: rgba(234, 179, 8, 0.25);
+  border-color: #eab308;
+  color: #fde047;
+}
+
+.star-btn.star-3.active {
+  background: rgba(132, 204, 22, 0.25);
+  border-color: #84cc16;
+  color: #bef264;
+}
+
+.star-btn.star-4.active {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+  color: #6ee7b7;
+}
+
+.ref-translation-box {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========================================================
+   JAPANESE LEARNING SPECIFIC STYLES: RUBY, FURIGANA & KANA
+   ======================================================== */
+
+/* Japanese typography */
+.jp-font {
+  font-family: 'Outfit', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif;
+}
+
+/* Ruby Furigana Base */
+ruby {
+  ruby-align: center;
+  ruby-position: over;
+}
+
+rt {
+  font-size: 0.58em;
+  font-weight: 500;
+  line-height: 1;
+  color: #fde047;
+  letter-spacing: 0.02em;
+  user-select: none;
+  font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+}
+
+/* Furigana Display Modes */
+/* Mode: Hover Only */
+body.furigana-hover rt {
+  opacity: 0;
+  pointer-events: none;
+}
+body.furigana-hover .word-token:hover rt,
+body.furigana-hover ruby:hover rt,
+body.furigana-hover .word-token.active-token rt {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+/* Mode: Off */
+body.furigana-off rt {
+  display: none !important;
+}
+
+/* Romaji Sub-line */
+.romaji-subline {
+  font-family: 'Space Grotesk', 'Outfit', monospace;
+  font-size: 0.78rem;
+  color: #a1a1aa;
+  letter-spacing: 0.02em;
+  transition: all 0.2s ease;
+}
+
+body.romaji-hidden .romaji-subline {
+  display: none !important;
+}
+
+/* Kana Grid Tile */
+.kana-tile {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(63, 63, 70, 0.5);
+  background: rgba(24, 24, 27, 0.85);
+}
+
+.kana-tile:hover {
+  transform: translateY(-2px);
+  border-color: #facc15;
+  background: rgba(39, 39, 42, 0.95);
+  box-shadow: 0 4px 12px rgba(250, 204, 21, 0.15);
+}
+
+.kana-tile:active {
+  transform: scale(0.96);
+}
+
+/* Kanji breakdown chip */
+.kanji-breakdown-chip {
+  background: rgba(39, 39, 42, 0.7);
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 12px;
+  padding: 6px 10px;
+  transition: all 0.15s ease;
+}
+
+.kanji-breakdown-chip:hover {
+  border-color: #facc15;
+  background: rgba(63, 63, 70, 0.9);
+}
+/* KaTeX Display Math container styling */
+.katex-display {
+  margin: 0.35em 0 !important;
+  padding: 0.25em 0.5em !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.katex-display > .katex {
+  max-width: 100%;
+  font-size: 1.05em;
+  white-space: normal;
+}
+
+.katex {
+  font-size: 1.02em;
+  text-rendering: auto;
+}
+
+.katex-inline {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  padding: 0 1.5px;
+}
+
+/* KaTeX Display Math container styling */
+.katex-display {
+  margin: 0.45em 0 !important;
+  padding: 0.35em 0.75em !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  text-align: center;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(63, 63, 70, 0.35);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.katex-display::-webkit-scrollbar {
+  height: 4px;
+}
+.katex-display::-webkit-scrollbar-track {
+  background: rgba(24, 24, 27, 0.6);
+  border-radius: 4px;
+}
+.katex-display::-webkit-scrollbar-thumb {
+  background: #06b6d4;
+  border-radius: 4px;
+}
+.katex-display::-webkit-scrollbar-thumb:hover {
+  background: #22d3ee;
+}
+
+.katex-display > .katex {
+  max-width: 100%;
+  font-size: 1.08em;
+  white-space: normal;
+}
+
+/* ========================================================
+   PHYSICS LAB SIDE-BY-SIDE RESPONSIVE LAYOUT
+   ======================================================== */
+.phys-lab-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 290px !important;
+  gap: 1rem !important;
+  width: 100% !important;
+  align-items: start !important;
+}
+
+@media (max-width: 768px) {
+  .phys-lab-layout {
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem !important;
+  }
+}
+
+.phys-lab-chart-pane {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.phys-lab-controls-pane {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.phys-lab-canvas-box {
+  position: relative !important;
+  width: 100% !important;
+  height: 280px !important;
+  min-height: 280px !important;
+  border-radius: 1.25rem !important;
+  overflow: hidden !important;
+  background: radial-gradient(circle at 50% 50%, #0d0e14 0%, #06070a 100%) !important;
+  border: 1px solid rgba(34, 211, 238, 0.25) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.5) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.phys-lab-canvas-box:hover {
+  border-color: rgba(34, 211, 238, 0.45) !important;
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.6), 0 0 15px rgba(34, 211, 238, 0.15) !important;
+}
+
+@media (max-width: 640px) {
+  .phys-lab-canvas-box {
+    height: 250px !important;
+    min-height: 250px !important;
+  }
+}
+

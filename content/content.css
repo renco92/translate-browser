@@ -1,0 +1,510 @@
+/**
+ * Quizzler Web Immersion & Flashcard Studio - On-Page Content Styles
+ * Namespaced with `qz-` to prevent style collisions with host webpages.
+ * Implements Quizzler's signature dark glassmorphic `.pro-card` aesthetic,
+ * interactive `.qz-word-token` highlights, Ruby Furigana modes, and 3D Index Cards.
+ */
+
+/* Interactive Word Tokens on Webpages */
+.qz-word-token {
+  display: inline;
+  padding: 0px 2px;
+  margin: 0 0.5px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+  border-bottom: 2px solid transparent;
+  position: relative;
+}
+
+.qz-word-token:hover {
+  background-color: rgba(250, 204, 21, 0.24) !important;
+  border-bottom-color: rgba(250, 204, 21, 0.8) !important;
+}
+
+.qz-word-token.qz-in-review {
+  border-bottom: 2px solid #eab308 !important;
+  background-color: rgba(250, 204, 21, 0.12) !important;
+}
+
+.qz-word-token.qz-mastered {
+  border-bottom: 2px solid #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+.qz-word-token.qz-active-token {
+  background-color: #facc15 !important;
+  color: #090a0f !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.55) !important;
+  border-radius: 5px;
+}
+
+.qz-word-token.qz-phrase-selected {
+  background-color: rgba(250, 204, 21, 0.3) !important;
+  border-bottom: 2px dashed #eab308 !important;
+}
+
+/* Ruby Furigana Annotations on Webpages */
+.qz-word-token ruby,
+ruby.qz-ruby {
+  ruby-align: center;
+  ruby-position: over;
+}
+
+.qz-word-token rt,
+ruby.qz-ruby rt {
+  font-size: 0.6em;
+  font-weight: 600;
+  line-height: 1;
+  color: #d97706;
+  letter-spacing: 0.02em;
+  user-select: none;
+  transition: opacity 0.15s ease;
+}
+
+/* Dark-background adaptive furigana color */
+.qz-ui-root rt {
+  color: #fde047 !important;
+}
+
+html.qz-furigana-hover .qz-word-token rt,
+html.qz-furigana-hover ruby.qz-ruby rt {
+  opacity: 0;
+}
+
+html.qz-furigana-hover .qz-word-token:hover rt,
+html.qz-furigana-hover .qz-word-token.qz-active-token rt,
+html.qz-furigana-hover ruby.qz-ruby:hover rt {
+  opacity: 1;
+}
+
+html.qz-furigana-off .qz-word-token rt,
+html.qz-furigana-off ruby.qz-ruby rt {
+  display: none !important;
+}
+
+/* Romaji Sub-line under Translated Japanese Paragraphs */
+.qz-romaji-subline {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78em;
+  color: #71717a;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+html.qz-romaji-hidden .qz-romaji-subline {
+  display: none !important;
+}
+
+/* Inline Paragraph Action Pill */
+.qz-para-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.qz-para-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  background: rgba(24, 24, 27, 0.88);
+  color: #fde047 !important;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease;
+  text-decoration: none !important;
+}
+
+.qz-para-btn:hover {
+  background: #facc15;
+  color: #090a0f !important;
+  border-color: #facc15;
+  transform: translateY(-1px);
+}
+
+/* In-Page Sentence Translation & 0-4 Star Self-Assessment Drawer */
+.qz-trans-drawer {
+  margin-top: 8px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(18, 18, 22, 0.96);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.55);
+  color: #f4f4f5 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.qz-trans-drawer * {
+  box-sizing: border-box;
+}
+
+.qz-trans-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(9, 10, 15, 0.95);
+  border: 1px solid rgba(63, 63, 70, 0.8);
+  color: #f4f4f5 !important;
+  font-size: 12.5px;
+  font-family: inherit;
+  resize: vertical;
+  margin-top: 6px;
+}
+
+.qz-trans-input:focus {
+  outline: none;
+  border-color: #facc15;
+  box-shadow: 0 0 0 1px #facc15;
+}
+
+.qz-drawer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.qz-star-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qz-star-btn {
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  background: rgba(39, 39, 42, 0.9);
+  color: #a1a1aa !important;
+  transition: all 0.12s ease;
+}
+
+.qz-star-btn:hover {
+  border-color: #facc15;
+  color: #ffffff !important;
+}
+
+.qz-star-btn.qz-active {
+  background: rgba(250, 204, 21, 0.25);
+  border-color: #facc15;
+  color: #fde047 !important;
+}
+
+.qz-ref-box {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(39, 39, 42, 0.65);
+  border-left: 3px solid #10b981;
+  color: #e4e4e7 !important;
+  font-size: 12.5px;
+}
+
+/* ========================================================
+   QUIZZLER FLOATING UI ROOT (INSPECTOR HUD, DOCK & 3D MODAL)
+   ======================================================== */
+
+.qz-ui-root {
+  font-family: -apple-system, BlinkMacSystemFont, "Montserrat", "Segoe UI", Roboto, sans-serif;
+  color: #f4f4f5;
+  line-height: 1.4;
+  z-index: 2147483640;
+}
+
+.qz-ui-root *,
+.qz-ui-root *::before,
+.qz-ui-root *::after {
+  box-sizing: border-box;
+}
+
+/* Floating Toast Notification */
+#qz-toast {
+  position: fixed;
+  bottom: 74px;
+  right: 20px;
+  z-index: 2147483646;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: rgba(24, 24, 27, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: #fde047;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#qz-toast.qz-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Floating Bottom-Right Quizzler Control Dock */
+#qz-floating-dock {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 2147483642;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 20px;
+  background: rgba(18, 18, 22, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.75);
+}
+
+.qz-dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  background: rgba(39, 39, 42, 0.9);
+  color: #f4f4f5;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.qz-dock-btn:hover {
+  background: #3f3f46;
+  border-color: #a1a1aa;
+  color: #ffffff;
+}
+
+.qz-dock-btn.qz-primary {
+  background: #eab308;
+  color: #090a0f;
+  border-color: #facc15;
+}
+
+.qz-dock-btn.qz-primary:hover {
+  background: #facc15;
+}
+
+.qz-dock-select {
+  padding: 5px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(24, 24, 27, 0.95);
+  color: #fde047;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  cursor: pointer;
+}
+
+/* Floating Right Inspector HUD Card */
+#qz-floating-inspector {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  z-index: 2147483644;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(20, 20, 24, 0.96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.85);
+  color: #f4f4f5;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+  transform: translateX(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#qz-floating-inspector.qz-open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.qz-insp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.qz-insp-word {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.qz-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  background: rgba(39, 39, 42, 0.9);
+  color: #facc15;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.qz-icon-btn:hover {
+  background: #3f3f46;
+  color: #ffffff;
+}
+
+.qz-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: 700;
+  background: rgba(39, 39, 42, 0.95);
+  color: #facc15;
+  border: 1px solid rgba(63, 63, 70, 0.8);
+}
+
+.qz-card-box {
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 16px;
+  background: rgba(12, 12, 15, 0.9);
+  border: 1px solid rgba(63, 63, 70, 0.65);
+}
+
+.qz-label-mono {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a1a1aa;
+  font-weight: 700;
+  display: block;
+}
+
+.qz-kanji-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(39, 39, 42, 0.75);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  margin-top: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.qz-kanji-chip:hover {
+  border-color: #facc15;
+}
+
+/* On-Page 3D Flashcards Modal */
+#qz-modal-flashcards {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483645;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(10px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+#qz-modal-flashcards.qz-open {
+  display: flex;
+}
+
+.qz-modal-card {
+  width: 100%;
+  max-width: 540px;
+  border-radius: 28px;
+  padding: 22px;
+  background: rgba(20, 20, 24, 0.98);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+  color: #f4f4f5;
+}
+
+.qz-card-scene {
+  perspective: 1200px;
+  margin: 14px 0;
+}
+
+.qz-card-3d {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.qz-card-3d.qz-flipped {
+  transform: rotateY(180deg);
+}
+
+.qz-card-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 22px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: rgba(28, 28, 33, 0.98);
+  border: 1px solid rgba(82, 82, 91, 0.6);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+.qz-card-face-back {
+  transform: rotateY(180deg);
+  border-color: rgba(250, 204, 21, 0.45);
+}

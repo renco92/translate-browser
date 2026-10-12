@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-zinc-950 text-zinc-100 select-none antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quizzler • Full-Screen Flashcard & Web Immersion Studio</title>
+
+  <link rel="stylesheet" href="../css/tailwind.min.css">
+  <link rel="stylesheet" href="../css/styles.css">
+
+  <script src="../data/french_vocab_db.js" defer></script>
+  <script src="../data/japanese_vocab_db.js" defer></script>
+  <script src="../shared/sound_engine.js" defer></script>
+  <script src="../shared/storage_manager.js" defer></script>
+  <script src="studio.js" defer></script>
+</head>
+<body class="h-full w-full overflow-hidden pro-bg text-zinc-100 flex flex-col justify-between">
+
+  <!-- Top Navigation Header -->
+  <header class="shrink-0 z-30 w-full px-4 sm:px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div id="st-flag-crest" class="w-11 h-11 rounded-2xl pro-card flex items-center justify-center text-2xl border border-yellow-400/30 shadow-md">
+        🇫🇷
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-display font-black tracking-tight text-white">
+            Quizzler Web Studio
+          </h1>
+          <span id="st-lang-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-yellow-400/20 text-yellow-400 border border-yellow-400/30">
+            FRENCH
+          </span>
+        </div>
+        <p class="text-xs text-zinc-400">3D Spaced Repetition Vault & Custom Article Immersion Reader</p>
+      </div>
+    </div>
+
+    <!-- Center Mode Switcher -->
+    <div class="flex items-center gap-2 bg-zinc-900/90 p-1 rounded-2xl border border-zinc-800">
+      <button id="st-mode-cards" class="px-4 py-1.5 rounded-xl text-xs font-bold bg-yellow-400 text-zinc-950 transition">
+        🗂️ 3D Flashcards Studio
+      </button>
+      <button id="st-mode-reader" class="px-4 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition">
+        📖 Custom Article & Text Reader
+      </button>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-2">
+      <select id="st-lang-select" class="pro-input px-3 py-1.5 rounded-xl text-xs font-bold text-yellow-400 cursor-pointer">
+        <option value="fr">🇫🇷 Français (French)</option>
+        <option value="ja">🇯🇵 日本語 (Japanese)</option>
+        <option value="es">🇪🇸 Español (Spanish)</option>
+        <option value="de">🇩🇪 Deutsch (German)</option>
+        <option value="it">🇮🇹 Italiano (Italian)</option>
+      </select>
+
+      <div id="st-ja-bar" class="hidden items-center gap-1.5">
+        <button id="st-btn-furigana" class="pro-btn px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold text-yellow-300">
+          あ Furigana: Always
+        </button>
+        <button id="st-btn-romaji" class="pro-btn px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold text-zinc-300">
+          Romaji: Off
+        </button>
+      </div>
+
+      <button id="st-btn-immersion" class="pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold text-yellow-300 border-yellow-400/40">
+        👁️ Immersion: Hide Ref
+      </button>
+
+      <button id="st-btn-sound" class="pro-btn w-9 h-9 rounded-xl flex items-center justify-center text-yellow-400">
+        🔊
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace Area -->
+  <div class="flex-1 flex min-h-0 overflow-hidden p-3 sm:p-5 gap-4 max-w-7xl w-full mx-auto">
+
+    <!-- Left Sidebar: Review Vault Inventory & Add Custom Card -->
+    <aside class="w-72 flex-shrink-0 pro-card rounded-3xl p-4 flex flex-col min-h-0 border border-zinc-700/60">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <h2 class="text-sm font-display font-bold text-white">Review Vault</h2>
+          <p id="st-vault-sub" class="text-[11px] text-zinc-400 font-mono">5 cards • 0 mastered</p>
+        </div>
+        <button id="st-btn-new-card" class="pro-btn px-2.5 py-1 rounded-xl bg-yellow-500 text-zinc-950 font-bold text-xs">
+          + New Card
+        </button>
+      </div>
+
+      <!-- New Custom Card Inline Form -->
+      <div id="st-new-card-form" class="hidden my-2 p-3 rounded-2xl bg-zinc-900 border border-yellow-400/40 space-y-2">
+        <input id="st-new-word" type="text" placeholder="Target word / phrase..." class="pro-input w-full px-2.5 py-1.5 rounded-xl text-xs" />
+        <input id="st-new-en" type="text" placeholder="English meaning..." class="pro-input w-full px-2.5 py-1.5 rounded-xl text-xs" />
+        <input id="st-new-ctx" type="text" placeholder="Example sentence (optional)..." class="pro-input w-full px-2.5 py-1.5 rounded-xl text-xs" />
+        <div class="flex justify-end gap-1.5">
+          <button id="st-cancel-new-card" class="pro-btn px-2 py-1 rounded-lg text-[11px]">Cancel</button>
+          <button id="st-save-new-card" class="pro-btn px-2.5 py-1 rounded-lg bg-yellow-500 text-zinc-950 font-bold text-[11px]">Save Card</button>
+        </div>
+      </div>
+
+      <input id="st-vault-search" type="text" placeholder="Filter vault words..." class="pro-input w-full px-3 py-2 rounded-xl text-xs my-2.5" />
+
+      <div id="st-vault-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs"></div>
+    </aside>
+
+    <!-- Center Surface: Mode 1 (3D Flashcards) OR Mode 2 (Custom Article Reader) -->
+    <main class="flex-1 flex flex-col min-w-0 min-h-0">
+
+      <!-- ==========================================
+           VIEW 1: FULL-SCREEN 3D FLASHCARDS STUDIO
+           ========================================== -->
+      <div id="st-surface-cards" class="pro-card flex-1 rounded-3xl p-5 sm:p-7 flex flex-col justify-between overflow-y-auto border border-zinc-700/60">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+          <div class="flex items-center gap-2">
+            <button data-filter="all" class="st-filter-btn pro-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-yellow-400/20 text-yellow-300 border-yellow-400/40">All Cards</button>
+            <button data-filter="learning" class="st-filter-btn pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-400">Learning</button>
+            <button data-filter="mastered" class="st-filter-btn pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-400">Mastered</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="st-card-progress" class="px-2.5 py-1 rounded-full bg-yellow-400/20 text-yellow-300 font-mono text-xs font-bold">Card 1 / 5</span>
+            <button id="st-btn-shuffle" class="pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold">🔀 Shuffle</button>
+          </div>
+        </div>
+
+        <div class="w-full bg-zinc-900 rounded-full h-1.5 my-3 overflow-hidden border border-zinc-800">
+          <div id="st-card-bar" class="h-full bg-yellow-400 transition-all duration-300" style="width: 20%"></div>
+        </div>
+
+        <!-- 3D Card Flipper -->
+        <div class="card-scene my-auto max-w-xl w-full mx-auto">
+          <div id="st-card-flipper" class="card-3d">
+            <!-- FRONT -->
+            <div class="card-face card-face-front pro-card p-6 flex flex-col justify-between border border-zinc-700/80 bg-zinc-900/95 shadow-2xl">
+              <div class="flex items-center justify-between">
+                <span id="st-card-level" class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                  Level 1 • Learning
+                </span>
+                <button id="st-card-audio" class="pro-btn p-2 rounded-xl text-yellow-400 hover:text-white" title="Replay Audio [A]">🔊</button>
+              </div>
+
+              <div class="text-center my-auto py-2">
+                <h3 id="st-card-front-word" class="text-4xl font-display font-black text-white jp-font">le prince</h3>
+                <p id="st-card-front-phonetic" class="text-sm font-mono text-yellow-400 mt-1">/pʁɛ̃s/</p>
+                <span id="st-card-front-pos" class="inline-block mt-2 px-3 py-0.5 rounded-full text-xs font-mono bg-zinc-800 text-zinc-300 border border-zinc-700">noun</span>
+              </div>
+
+              <div id="st-card-kanji-chips" class="hidden flex flex-wrap justify-center gap-1.5 my-1"></div>
+
+              <div class="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center">
+                <p id="st-card-front-ctx" class="text-sm text-zinc-300 italic jp-font">« S'il vous plaît... dessine-moi un mouton ! »</p>
+              </div>
+
+              <div class="text-center text-xs text-zinc-500 font-mono">
+                Click card or press [Space] to flip • [A] Audio • [1][2][3] Rate
+              </div>
+            </div>
+
+            <!-- BACK -->
+            <div class="card-face card-face-back pro-card p-6 flex flex-col justify-between border border-yellow-400/40 bg-zinc-900/95 shadow-2xl">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-mono uppercase tracking-wider text-yellow-400 font-bold">English Meaning & Context</span>
+                <span id="st-card-back-word" class="font-display font-bold text-white text-base jp-font">le prince</span>
+              </div>
+
+              <div class="text-center my-auto py-2">
+                <div id="st-card-back-en" class="text-3xl font-display font-black text-yellow-300">prince</div>
+                <div id="st-card-back-sub" class="text-xs text-zinc-400 mt-1"></div>
+              </div>
+
+              <div class="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center space-y-1">
+                <p id="st-card-back-ctx-target" class="text-sm text-zinc-200 italic jp-font"></p>
+                <p id="st-card-back-ctx-en" class="text-xs text-zinc-400"></p>
+              </div>
+
+              <div class="text-center text-xs text-zinc-400 font-mono">
+                Grade your recall below:
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rating Buttons -->
+        <div class="max-w-xl w-full mx-auto pt-4 space-y-3">
+          <div class="grid grid-cols-3 gap-3">
+            <button id="st-rate-1" class="pro-btn py-3 rounded-2xl bg-red-950/60 hover:bg-red-900 border border-red-500/50 text-red-300 font-bold text-xs flex flex-col items-center">
+              <span>[1] Hard • Again</span>
+              <span class="text-[10px] text-red-400/80 font-normal">Keep in queue</span>
+            </button>
+            <button id="st-rate-2" class="pro-btn py-3 rounded-2xl bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-400/50 text-yellow-300 font-bold text-xs flex flex-col items-center">
+              <span>[2] Good • Retained</span>
+              <span class="text-[10px] text-yellow-400/80 font-normal">Advance box</span>
+            </button>
+            <button id="st-rate-3" class="pro-btn py-3 rounded-2xl bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 font-bold text-xs flex flex-col items-center">
+              <span>[3] Easy • Mastered</span>
+              <span class="text-[10px] text-emerald-400/80 font-normal">Level 3 Mastery</span>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-zinc-400">
+            <button id="st-card-prev" class="pro-btn px-4 py-1.5 rounded-xl">← Previous Card</button>
+            <button id="st-card-next" class="pro-btn px-4 py-1.5 rounded-xl">Next Card →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           VIEW 2: CUSTOM WEB ARTICLE & TEXT READER
+           ========================================== -->
+      <div id="st-surface-reader" class="hidden pro-card flex-1 rounded-3xl p-5 sm:p-7 flex flex-col min-h-0 overflow-hidden border border-zinc-700/60">
+        <div class="pb-3 mb-3 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-display font-bold text-white">Custom Web Text & Article Reader</h2>
+            <p class="text-xs text-zinc-400">Paste any article or text to translate into your target language, click words, and practice sentence-by-sentence translation.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="st-btn-toggle-paste" class="pro-btn px-3 py-1.5 rounded-xl text-xs font-semibold text-yellow-300">
+              📝 Edit / Paste Text
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Input Box -->
+        <div id="st-paste-box" class="mb-4 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-2.5">
+          <textarea id="st-paste-input" rows="4" class="pro-input w-full p-3 rounded-xl text-xs leading-relaxed" placeholder="Paste any English or target-language article, story, or paragraphs here..."></textarea>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <button id="st-btn-tokenize-raw" class="pro-btn px-4 py-2 rounded-xl text-xs font-semibold">
+              🔍 Tokenize As-Is (Already in Target Language)
+            </button>
+            <button id="st-btn-translate-raw" class="pro-btn px-4 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs shadow">
+              🌐 Translate to Target Language & Tokenize
+            </button>
+          </div>
+        </div>
+
+        <!-- Reader Sentences Container -->
+        <div id="st-reader-sentences" class="flex-1 overflow-y-auto space-y-3.5 pr-2"></div>
+      </div>
+
+    </main>
+
+    <!-- Right Sidebar: Word & Kanji Inspector HUD -->
+    <aside class="w-80 flex-shrink-0 pro-card rounded-3xl p-5 flex flex-col justify-between overflow-y-auto border border-zinc-700/60">
+      <div class="space-y-3">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 id="st-insp-word" class="text-2xl font-display font-black text-white jp-font">le prince</h3>
+              <button id="st-insp-audio" class="pro-btn w-8 h-8 rounded-xl flex items-center justify-center text-yellow-400">🔊</button>
+            </div>
+            <span id="st-insp-phonetic" class="text-xs font-mono text-yellow-400 block mt-0.5">/pʁɛ̃s/</span>
+          </div>
+          <span id="st-insp-pos" class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-zinc-800 text-yellow-400 border border-zinc-700">
+            noun
+          </span>
+        </div>
+
+        <div class="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800">
+          <span class="text-[10px] text-zinc-400 uppercase font-mono font-bold block mb-1">English Translation</span>
+          <div id="st-insp-en" class="text-base font-bold text-yellow-300">prince</div>
+        </div>
+
+        <div class="p-3 rounded-2xl bg-zinc-900/70 border border-zinc-800/80 text-xs space-y-1">
+          <span class="text-[10px] text-zinc-400 uppercase font-mono font-bold block">Context Sentence</span>
+          <p id="st-insp-ctx-target" class="text-zinc-200 italic jp-font">« S'il vous plaît... dessine-moi un mouton ! »</p>
+          <p id="st-insp-ctx-en" class="text-zinc-400 text-[11px]">"Please... draw me a sheep!"</p>
+        </div>
+
+        <div id="st-insp-extra" class="hidden space-y-1.5"></div>
+      </div>
+
+      <div class="pt-3 border-t border-zinc-800">
+        <button id="st-btn-toggle-vault" class="pro-btn w-full py-2.5 rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs">
+          ⭐ + Add to Flashcards Deck
+        </button>
+      </div>
+    </aside>
+
+  </div>
+
+</body>
+</html>

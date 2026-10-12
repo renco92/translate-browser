@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-zinc-950 text-zinc-100 select-none antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quizzler • Web Immersion & Flashcard Side Panel</title>
+
+  <link rel="stylesheet" href="../css/tailwind.min.css">
+  <link rel="stylesheet" href="../css/styles.css">
+
+  <script src="../data/french_vocab_db.js" defer></script>
+  <script src="../data/japanese_vocab_db.js" defer></script>
+  <script src="../shared/sound_engine.js" defer></script>
+  <script src="../shared/storage_manager.js" defer></script>
+  <script src="sidepanel.js" defer></script>
+</head>
+<body class="h-full w-full overflow-hidden pro-bg text-zinc-100 flex flex-col justify-between">
+
+  <!-- Top Header -->
+  <header class="shrink-0 px-3.5 py-2.5 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <div id="sp-flag-badge" class="w-9 h-9 rounded-2xl pro-card flex items-center justify-center text-lg border border-yellow-400/30 shadow-md shrink-0">
+        🇫🇷
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-sm font-display font-black tracking-tight text-white truncate">Quizzler</h1>
+          <span id="sp-lang-pill" class="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold bg-yellow-400/20 text-yellow-400 border border-yellow-400/30">
+            FRENCH
+          </span>
+        </div>
+        <p class="text-[10px] text-zinc-400 truncate">Web Immersion & 3D Flashcards</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+      <select id="sp-lang-select" class="pro-input px-2 py-1 rounded-xl text-xs font-bold text-yellow-400 cursor-pointer" title="Switch Target Language">
+        <option value="fr">🇫🇷 Français</option>
+        <option value="ja">🇯🇵 日本語</option>
+        <option value="es">🇪🇸 Español</option>
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="it">🇮🇹 Italiano</option>
+      </select>
+
+      <button id="sp-btn-sound" class="pro-btn w-8 h-8 rounded-xl flex items-center justify-center text-yellow-400" title="Toggle Audio & Speech">
+        🔊
+      </button>
+
+      <button id="sp-btn-open-studio" class="pro-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-yellow-300 border border-yellow-400/30" title="Open Full-Screen Flashcard & Reader Studio">
+        ⛶ Studio
+      </button>
+    </div>
+  </header>
+
+  <!-- Webpage Immersion Control Strip -->
+  <section class="shrink-0 px-3.5 py-2.5 border-b border-zinc-800/80 bg-zinc-900/60 space-y-2">
+    <div class="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+      <span>Active Tab Controls</span>
+      <span id="sp-vault-summary" class="text-yellow-400 font-bold">5 cards • 0 mastered</span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-1.5">
+      <button id="sp-btn-translate-page" class="pro-btn py-2 px-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow">
+        <span>🌐</span>
+        <span>Translate & Immerse</span>
+      </button>
+      <button id="sp-btn-tokenize-page" class="pro-btn py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+        <span>🔍</span>
+        <span>Tokenize Native Page</span>
+      </button>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
+      <button id="sp-btn-immersion-mode" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1 text-yellow-300 border-yellow-400/40">
+        <span>👁️</span>
+        <span id="sp-immersion-label">Immersion: Hide Ref</span>
+      </button>
+
+      <button id="sp-btn-restore-page" class="pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold text-zinc-300">
+        🔄 Restore Page
+      </button>
+    </div>
+
+    <!-- Japanese-Specific Controls (Furigana, Romaji, 50-Sounds Kana Chart) -->
+    <div id="sp-ja-controls" class="hidden pt-1 border-t border-zinc-800/70 flex items-center justify-between gap-1.5">
+      <button id="sp-btn-furigana" class="pro-btn flex-1 py-1 px-2 rounded-xl text-[11px] font-mono font-bold text-yellow-300">
+        あ Furigana: Always
+      </button>
+      <button id="sp-btn-romaji" class="pro-btn py-1 px-2.5 rounded-xl text-[11px] font-mono font-bold text-zinc-300">
+        Romaji: Off
+      </button>
+      <button id="sp-btn-kana-chart" class="pro-btn py-1 px-2.5 rounded-xl text-[11px] font-bold text-cyan-300 border-cyan-400/40">
+        🔤 50音図 Kana
+      </button>
+    </div>
+  </section>
+
+  <!-- Primary Navigation Tabs -->
+  <nav class="shrink-0 px-3.5 pt-2 border-b border-zinc-800/80 flex items-center gap-1.5 bg-zinc-950/60">
+    <button data-tab="inspector" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-yellow-400 text-yellow-400 bg-zinc-900/80">
+      📖 Inspector
+    </button>
+    <button data-tab="flashcards" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+      🗂️ 3D Cards
+    </button>
+    <button data-tab="vault" class="sp-nav-tab flex-1 py-2 rounded-t-xl text-xs font-bold border-b-2 border-transparent text-zinc-400 hover:text-white">
+      🏦 Vault (<span id="sp-tab-vault-count">5</span>)
+    </button>
+  </nav>
+
+  <!-- Scrollable Tab Body -->
+  <main class="flex-1 overflow-y-auto p-3.5 space-y-3 min-h-0">
+
+    <!-- ==========================================
+         TAB 1: WORD INSPECTOR & DICTIONARY SEARCH
+         ========================================== -->
+    <div id="sp-view-inspector" class="space-y-3">
+      <form id="sp-search-form" class="relative flex items-center">
+        <input
+          type="text"
+          id="sp-search-input"
+          autocomplete="off"
+          placeholder="Search word or phrase (e.g. renard, 狐, kitsune)..."
+          class="pro-input w-full pl-3.5 pr-16 py-2.5 rounded-2xl text-xs font-semibold placeholder-zinc-500"
+        />
+        <button type="submit" class="pro-btn absolute right-1.5 px-2.5 py-1.5 rounded-xl bg-yellow-500 text-zinc-950 font-bold text-[11px]">
+          Lookup
+        </button>
+      </form>
+
+      <!-- Active Word Inspector Card -->
+      <div id="sp-inspector-card" class="pro-card rounded-3xl p-4 space-y-3 border border-zinc-700/80">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 id="sp-insp-word" class="text-2xl font-display font-black text-white jp-font">le prince</h2>
+              <button id="sp-insp-audio" class="pro-btn w-7 h-7 rounded-xl flex items-center justify-center text-yellow-400" title="Listen to pronunciation">
+                🔊
+              </button>
+            </div>
+            <div id="sp-insp-phonetic" class="text-xs font-mono text-yellow-400 mt-0.5">/pʁɛ̃s/</div>
+            <div id="sp-insp-romaji" class="text-[11px] font-mono text-zinc-400 hidden"></div>
+          </div>
+
+          <span id="sp-insp-status" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-yellow-400 border border-zinc-700">
+            Level 1
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span id="sp-insp-pos" class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-zinc-800 text-yellow-400 border border-zinc-700">
+            Noun (Masc.)
+          </span>
+        </div>
+
+        <!-- English Definition + Inline Custom Definition Editor -->
+        <div class="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] text-zinc-400 uppercase font-mono font-bold">English Translation</span>
+              <span id="sp-insp-custom-badge" class="hidden px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-yellow-300 border border-yellow-500/30">Custom</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button id="sp-btn-edit-def" class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-yellow-400">Edit</button>
+              <button id="sp-btn-reset-def" class="hidden text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400">Reset</button>
+            </div>
+          </div>
+
+          <div id="sp-insp-en" class="text-base font-bold text-yellow-300">prince</div>
+
+          <div id="sp-insp-edit-form" class="hidden mt-2 space-y-2">
+            <textarea id="sp-insp-edit-input" rows="2" class="w-full p-2 text-xs rounded-xl bg-zinc-950 border border-yellow-400/50 text-yellow-300" placeholder="Enter your custom definition..."></textarea>
+            <div class="flex justify-end gap-1.5">
+              <button id="sp-btn-cancel-def" class="px-2.5 py-1 rounded-lg text-[11px] bg-zinc-800 text-zinc-300">Cancel</button>
+              <button id="sp-btn-save-def" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-yellow-400 text-zinc-950">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sentence Context Card -->
+        <div class="p-3 rounded-2xl bg-zinc-900/70 border border-zinc-800/80 text-xs space-y-1">
+          <span class="text-[10px] text-zinc-400 block uppercase font-mono font-bold">Sentence Context</span>
+          <p id="sp-insp-ctx-target" class="text-zinc-200 italic jp-font leading-snug">« S'il vous plaît... dessine-moi un mouton ! »</p>
+          <p id="sp-insp-ctx-en" class="text-zinc-400 text-[11px]">"Please... draw me a sheep!"</p>
+        </div>
+
+        <!-- Kanji Breakdown OR Idiom Box -->
+        <div id="sp-insp-extra-box" class="hidden space-y-1.5"></div>
+
+        <!-- Add/Remove Flashcard Button -->
+        <button id="sp-btn-toggle-vault" class="pro-btn w-full py-2.5 rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md">
+          ⭐ + Add to Flashcards Deck
+        </button>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         TAB 2: 3D TACTILE FLASHCARDS TRAINER
+         ========================================== -->
+    <div id="sp-view-flashcards" class="hidden space-y-3">
+      <div class="flex items-center justify-between gap-1.5">
+        <div class="flex items-center gap-1">
+          <button data-filter="all" class="sp-card-filter pro-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-yellow-400/20 text-yellow-300 border-yellow-400/40">All</button>
+          <button data-filter="learning" class="sp-card-filter pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold text-zinc-400">Learning</button>
+          <button data-filter="mastered" class="sp-card-filter pro-btn px-2.5 py-1 rounded-xl text-[11px] font-semibold text-zinc-400">Mastered</button>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span id="sp-card-progress" class="text-[11px] font-mono text-yellow-400 font-bold">1 / 5</span>
+          <button id="sp-btn-shuffle" class="pro-btn px-2 py-1 rounded-xl text-[11px]" title="Shuffle Deck">🔀</button>
+        </div>
+      </div>
+
+      <div class="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden border border-zinc-800">
+        <div id="sp-card-bar" class="h-full bg-yellow-400 transition-all duration-300" style="width: 20%"></div>
+      </div>
+
+      <!-- 3D Flipper Scene -->
+      <div class="card-scene">
+        <div id="sp-card-flipper" class="card-3d" style="height: 330px;">
+          <!-- FRONT -->
+          <div class="card-face card-face-front pro-card p-5 flex flex-col justify-between border border-zinc-700/80 bg-zinc-900/95">
+            <div class="flex items-center justify-between">
+              <span id="sp-card-level-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                Level 1 • Learning
+              </span>
+              <button id="sp-card-audio-btn" class="pro-btn p-1.5 rounded-xl text-yellow-400" title="Replay Audio [A]">🔊</button>
+            </div>
+
+            <div class="text-center my-auto py-1">
+              <h3 id="sp-card-front-word" class="text-2xl sm:text-3xl font-display font-black text-white jp-font">le prince</h3>
+              <p id="sp-card-front-phonetic" class="text-xs font-mono text-yellow-400 mt-1">/pʁɛ̃s/</p>
+              <span id="sp-card-front-pos" class="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700">noun</span>
+            </div>
+
+            <div id="sp-card-kanji-chips" class="hidden flex flex-wrap justify-center gap-1 my-1"></div>
+
+            <div class="p-2.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center">
+              <p id="sp-card-front-ctx" class="text-xs text-zinc-300 italic jp-font leading-snug">« S'il vous plaît... dessine-moi un mouton ! »</p>
+            </div>
+
+            <div class="text-center text-[10px] text-zinc-500 font-mono">
+              Click card or press [Space] to flip
+            </div>
+          </div>
+
+          <!-- BACK -->
+          <div class="card-face card-face-back pro-card p-5 flex flex-col justify-between border border-yellow-400/40 bg-zinc-900/95">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-mono uppercase tracking-wider text-yellow-400 font-bold">Translation & Context</span>
+              <span id="sp-card-back-word" class="font-display font-bold text-white text-sm jp-font">le prince</span>
+            </div>
+
+            <div class="text-center my-auto py-1">
+              <div id="sp-card-back-en" class="text-2xl font-display font-black text-yellow-300">prince</div>
+              <div id="sp-card-back-sub" class="text-xs text-zinc-400 mt-1"></div>
+            </div>
+
+            <div class="p-2.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center space-y-1">
+              <p id="sp-card-back-ctx-target" class="text-xs text-zinc-200 italic jp-font leading-snug"></p>
+              <p id="sp-card-back-ctx-en" class="text-[11px] text-zinc-400"></p>
+            </div>
+
+            <div class="text-center text-[10px] text-zinc-400 font-mono">
+              Rate recall: [1] Again • [2] Good • [3] Easy
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rating Buttons -->
+      <div class="grid grid-cols-3 gap-1.5">
+        <button id="sp-rate-1" class="pro-btn py-2 rounded-2xl bg-red-950/60 hover:bg-red-900 border border-red-500/50 text-red-300 font-bold text-[11px] flex flex-col items-center">
+          <span>[1] Hard</span>
+          <span class="text-[9px] text-red-400/80 font-normal">Again</span>
+        </button>
+        <button id="sp-rate-2" class="pro-btn py-2 rounded-2xl bg-yellow-950/60 hover:bg-yellow-900 border border-yellow-400/50 text-yellow-300 font-bold text-[11px] flex flex-col items-center">
+          <span>[2] Good</span>
+          <span class="text-[9px] text-yellow-400/80 font-normal">Retained</span>
+        </button>
+        <button id="sp-rate-3" class="pro-btn py-2 rounded-2xl bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 font-bold text-[11px] flex flex-col items-center">
+          <span>[3] Easy</span>
+          <span class="text-[9px] text-emerald-400/80 font-normal">Mastered</span>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between pt-1">
+        <button id="sp-card-prev" class="pro-btn px-3 py-1 rounded-xl text-xs">← Prev</button>
+        <button id="sp-card-next" class="pro-btn px-3 py-1 rounded-xl text-xs">Next →</button>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         TAB 3: REVIEW VAULT & JSON BACKUP
+         ========================================== -->
+    <div id="sp-view-vault" class="hidden space-y-3">
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800">
+          <span class="text-[10px] text-zinc-400 font-mono block">Total</span>
+          <span id="sp-stat-total" class="text-sm font-mono font-bold text-white">5</span>
+        </div>
+        <div class="p-2.5 rounded-2xl bg-zinc-900/90 border border-yellow-500/30">
+          <span class="text-[10px] text-yellow-300 font-mono block">Learning</span>
+          <span id="sp-stat-learning" class="text-sm font-mono font-bold text-yellow-400">5</span>
+        </div>
+        <div class="p-2.5 rounded-2xl bg-zinc-900/90 border border-emerald-500/30">
+          <span class="text-[10px] text-emerald-300 font-mono block">Mastered</span>
+          <span id="sp-stat-mastered" class="text-sm font-mono font-bold text-emerald-400">0</span>
+        </div>
+      </div>
+
+      <input
+        type="text"
+        id="sp-vault-filter-input"
+        placeholder="Filter saved flashcards..."
+        class="pro-input w-full px-3 py-2 rounded-xl text-xs"
+      />
+
+      <div id="sp-vault-list" class="space-y-1.5 max-h-72 overflow-y-auto pr-1"></div>
+
+      <!-- Backup Export / Import -->
+      <div class="p-3 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-2">
+        <div class="text-xs font-bold text-zinc-200 flex items-center justify-between">
+          <span>💾 Flashcard Vault Backup</span>
+          <span class="text-[10px] font-mono text-zinc-400">JSON</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="sp-btn-export" class="pro-btn py-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs">
+            ⬇️ Export JSON
+          </button>
+          <button id="sp-btn-import" class="pro-btn py-2 rounded-xl text-xs font-semibold">
+            ⬆️ Import JSON
+          </button>
+          <input type="file" id="sp-import-file" accept=".json" class="hidden" />
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal: Interactive 50-Sounds Kana Chart (Japanese) -->
+  <div id="sp-modal-kana" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 hidden">
+    <div class="pro-card w-full max-w-md rounded-3xl p-4 flex flex-col max-h-[90vh] border border-cyan-400/40">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+        <div>
+          <h3 class="text-sm font-display font-bold text-white">五十音図 • Kana Syllabary</h3>
+          <p class="text-[10px] text-zinc-400">Click any syllable to hear native pronunciation</p>
+        </div>
+        <button id="sp-close-kana" class="pro-btn w-7 h-7 rounded-xl text-zinc-300">✕</button>
+      </div>
+      <div class="flex gap-1.5 my-2">
+        <button id="sp-kana-hira" class="px-3 py-1 rounded-xl text-xs font-bold bg-yellow-400 text-zinc-950">Hiragana (ひらがな)</button>
+        <button id="sp-kana-kata" class="px-3 py-1 rounded-xl text-xs font-semibold bg-zinc-800 text-zinc-300">Katakana (カタカナ)</button>
+      </div>
+      <div id="sp-kana-grid" class="flex-1 overflow-y-auto grid grid-cols-5 gap-1.5 pr-1"></div>
+    </div>
+  </div>
+
+  <!-- Toast Footer -->
+  <div id="sp-toast" class="fixed bottom-3 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-2xl text-xs font-semibold pro-card border border-yellow-400/40 text-yellow-300 opacity-0 pointer-events-none transition-all duration-200">
+    Ready
+  </div>
+
+</body>
+</html>
